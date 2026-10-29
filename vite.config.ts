@@ -25,7 +25,11 @@ export default defineConfig({
 					: undefined,
 			themeColor: {light: "#f5f5f7", dark: "#21252b"},
 			html: {
-				attributes: {"data-theme-light": "knit-light", "data-theme-dark": "knit-dark"},
+				attributes: {
+					"data-theme-light": "knit-light",
+					"data-theme-dark": "knit-dark",
+					"data-examples": "site",
+				},
 			},
 			icons: {
 				source: process.env.PATCHWORK_FAVICON ?? "public/patchwork.svg",
