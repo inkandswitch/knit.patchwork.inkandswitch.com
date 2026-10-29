@@ -1,0 +1,237 @@
+@import url("https://fonts.googleapis.com/css2?family=PT+Serif:ital,wght@0,400;0,700;1,400&family=PT+Sans:ital,wght@0,400;0,700;1,400&family=PT+Mono&display=swap");
+
+[theme="warm"],
+[theme="purple"],
+[theme="teal"],
+[theme="neutral"],
+[theme="dark"] {
+	color-scheme: light;
+
+	--bg-chroma-scale: 0.75;
+	--accent-chroma: 0.15;
+	--accent-lightness: 50%;
+
+	--l-paper: 98.4%;
+	--l-paper-tint: 95%;
+	--l-ink: 18%;
+	--l-ink-soft: 34%;
+	--l-ink-mute: 53%;
+	--l-ink-dim: 70%;
+	--l-rule: 24%;
+	--l-rule-soft: 82%;
+	--l-rule-hair: 88%;
+
+	--paper: oklch(
+		var(--l-paper) calc(var(--hue-chroma) * 0.5 * var(--bg-chroma-scale))
+			var(--hue)
+	);
+	--paper-tint: oklch(var(--l-paper-tint) calc(var(--hue-chroma) * 2.5) var(--hue));
+	--ink: oklch(
+		var(--l-ink) calc(var(--hue-chroma) * 0.6 * var(--bg-chroma-scale)) var(--hue)
+	);
+	--ink-soft: oklch(
+		var(--l-ink-soft) calc(var(--hue-chroma) * 0.6 * var(--bg-chroma-scale))
+			var(--hue)
+	);
+	--ink-mute: oklch(
+		var(--l-ink-mute) calc(var(--hue-chroma) * 0.8 * var(--bg-chroma-scale))
+			var(--hue)
+	);
+	--ink-dim: oklch(
+		var(--l-ink-dim) calc(var(--hue-chroma) * 0.8 * var(--bg-chroma-scale))
+			var(--hue)
+	);
+	--rule: oklch(
+		var(--l-rule) calc(var(--hue-chroma) * 0.4 * var(--bg-chroma-scale)) var(--hue)
+	);
+	--rule-soft: oklch(
+		var(--l-rule-soft) calc(var(--hue-chroma) * 1 * var(--bg-chroma-scale))
+			var(--hue)
+	);
+	--rule-hair: oklch(
+		var(--l-rule-hair) calc(var(--hue-chroma) * 1.2 * var(--bg-chroma-scale))
+			var(--hue)
+	);
+	--accent: oklch(var(--accent-lightness) var(--accent-chroma) var(--hue));
+
+	--family-serif: "PT Serif", "Iowan Old Style", Charter, Cambria, Georgia, serif;
+	--family-sans: "PT Sans", ui-sans-serif, system-ui, -apple-system, sans-serif;
+	--family-mono: "PT Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+
+	--studio-fill: var(--paper);
+	--studio-line: var(--ink);
+	--studio-chrome-fill: var(--paper-tint);
+	--studio-chrome-line: var(--ink-soft);
+	--studio-offset-tint: var(--accent);
+	--studio-offset-tint-amount: 6%;
+
+	--studio-primary: var(--accent);
+	--studio-secondary: oklch(
+		var(--accent-lightness) var(--accent-chroma) calc(var(--hue) + 180)
+	);
+	--studio-link: oklch(
+		var(--accent-lightness) var(--accent-chroma) calc(var(--hue) + 155)
+	);
+	--studio-danger: oklch(
+		var(--accent-lightness) calc(var(--accent-chroma) * 1.2) calc(var(--hue) - 60)
+	);
+	--studio-warning: oklch(
+		calc(var(--accent-lightness) + 20%) calc(var(--accent-chroma) * 1.1)
+			calc(var(--hue) - 10)
+	);
+	--studio-added: oklch(
+		var(--accent-lightness) var(--accent-chroma) calc(var(--hue) + 60)
+	);
+	--studio-deleted: var(--studio-danger);
+	--studio-modified: var(--studio-warning);
+	--studio-selection-fill: color-mix(in oklch, var(--accent) 16%, transparent);
+	--studio-selection-line: var(--ink);
+
+	--studio-family-sans: var(--family-sans);
+	--studio-family-code: var(--family-mono);
+	--studio-family-ui: var(--family-sans);
+	--studio-font-size: 15px;
+	--studio-line-height: 1.5;
+	--studio-radius: 4px;
+	--studio-radius-md: 5px;
+	--studio-radius-lg: 8px;
+
+	--editor-family-sans: var(--family-serif);
+	--editor-line-height: 1.55;
+
+	--text-editor-fill: var(--paper);
+	--text-editor-line: var(--ink);
+	--text-editor-cursor-fill: var(--accent);
+	--text-editor-gutter-fill: var(--paper-tint);
+	--text-editor-gutter-line: var(--ink-dim);
+	--text-editor-gutter-border: var(--rule-hair);
+	--text-editor-gutter-font-size: 0.8em;
+	--text-editor-gutter-font-size--line-numbers: 0.8em;
+	--text-editor-active-line-fill: color-mix(
+		in oklch,
+		var(--accent) 6%,
+		transparent
+	);
+	--text-editor-active-line-fill--gutter: color-mix(
+		in oklch,
+		var(--accent) 12%,
+		transparent
+	);
+	--text-editor-tooltip-fill: var(--paper-tint);
+	--text-editor-tooltip-color: var(--ink);
+
+	--syntax-comment: oklch(
+		var(--l-ink-dim) calc(var(--accent-chroma) * 0.2) var(--hue)
+	);
+	--syntax-style-comment: italic;
+	--syntax-doc-comment: var(--syntax-comment);
+	--syntax-style-doc-comment: italic;
+	--syntax-quote: var(--syntax-comment);
+
+	--syntax-meta: var(--studio-link);
+	--syntax-invalid: var(--studio-danger);
+
+	--syntax-operator: var(--ink-mute);
+	--syntax-punctuation: var(--ink-mute);
+	--syntax-angle-bracket: var(--ink-mute);
+	--syntax-list: var(--ink-mute);
+
+	--syntax-keyword: oklch(
+		var(--l-ink-soft) calc(var(--accent-chroma) * 0.9) calc(var(--hue) - 60)
+	);
+	--syntax-control-keyword: var(--syntax-keyword);
+	--syntax-module-keyword: var(--syntax-keyword);
+	--syntax-attribute-name: var(--syntax-keyword);
+	--syntax-style-attribute-name: italic;
+	--syntax-tag-name: var(--syntax-keyword);
+
+	--syntax-bool: oklch(
+		var(--l-ink-soft) calc(var(--accent-chroma) * 0.9) calc(var(--hue) + 240)
+	);
+	--syntax-weight-bool: bold;
+	--syntax-atom: var(--syntax-bool);
+	--syntax-weight-atom: bold;
+	--syntax-number: var(--syntax-bool);
+	--syntax-integer: var(--syntax-bool);
+	--syntax-float: var(--syntax-bool);
+	--syntax-namespace: var(--syntax-bool);
+	--syntax-regexp: var(--syntax-bool);
+
+	--syntax-type-name: oklch(
+		var(--l-ink-soft) calc(var(--accent-chroma) * 0.8) calc(var(--hue) + 180)
+	);
+	--syntax-weight-type-name: bold;
+	--syntax-class-name: var(--syntax-type-name);
+	--syntax-weight-class-name: bold;
+	--syntax-type-operator: var(--syntax-type-name);
+
+	--syntax-function--variable-name: var(--syntax-keyword);
+	--syntax-function--property-name: var(--syntax-keyword);
+
+	--syntax-variable-name: var(--ink);
+	--syntax-definition--variable-name: var(--ink);
+
+	--syntax-string: oklch(
+		var(--l-ink-soft) calc(var(--accent-chroma) * 0.8) calc(var(--hue) + 60)
+	);
+	--syntax-fill-string: transparent;
+	--syntax-special--string: var(--syntax-string);
+	--syntax-escape: var(--syntax-keyword);
+
+	--syntax-strong: var(--ink);
+	--syntax-weight-strong: bold;
+	--syntax-emphasis: var(--ink);
+	--syntax-style-emphasis: italic;
+
+	--syntax-heading: var(--ink);
+	--syntax-weight-heading: bold;
+
+	--syntax-link: var(--studio-link);
+	--syntax-style-link: underline;
+
+	--syntax-inserted: var(--studio-added);
+	--syntax-deleted: var(--studio-deleted);
+	--syntax-changed: var(--studio-modified);
+	--syntax-content-separator: var(--rule-soft);
+}
+
+[theme="warm"] {
+	--hue: 85;
+	--hue-chroma: 0.01;
+}
+
+[theme="purple"] {
+	--hue: 296;
+	--hue-chroma: 0.01;
+}
+
+[theme="teal"] {
+	--hue: 200;
+	--hue-chroma: 0.008;
+}
+
+[theme="neutral"] {
+	--hue: 85;
+	--hue-chroma: 0;
+	--accent-chroma: 0;
+	--accent-lightness: 50%;
+}
+
+[theme="dark"] {
+	color-scheme: dark;
+
+	--hue: 85;
+	--hue-chroma: 0.012;
+	--accent-chroma: 0.13;
+	--accent-lightness: 74%;
+
+	--l-paper: 16%;
+	--l-paper-tint: 22%;
+	--l-ink: 93%;
+	--l-ink-soft: 84%;
+	--l-ink-mute: 68%;
+	--l-ink-dim: 52%;
+	--l-rule: 90%;
+	--l-rule-soft: 34%;
+	--l-rule-hair: 28%;
+}

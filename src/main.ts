@@ -3,6 +3,7 @@ import setup, {
 	showErrorScreen,
 	showLoadingAnimation,
 } from "@inkandswitch/patchwork"
+import "./main.css"
 
 const DEFAULT_PACKAGE_LIST = "/modules.json"
 

@@ -1,0 +1,174 @@
+/* plain desktop-software themes: system fonts, a neutral window/sidebar
+   palette and One Light / One Dark syntax colours. each theme only sets the
+   palette tokens at the bottom; everything else is mapped from them here. */
+
+[theme="knit-light"],
+[theme="knit-dark"] {
+	--knit-family-sans: system-ui, -apple-system, BlinkMacSystemFont, "SF Pro Text",
+		"Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+	--knit-family-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Monaco,
+		Consolas, "Liberation Mono", monospace;
+
+	--studio-fill: var(--knit-window);
+	--studio-line: var(--knit-text);
+	--studio-chrome-fill: var(--knit-sidebar);
+	--studio-chrome-line: var(--knit-text);
+	--studio-offset-tint: var(--knit-text);
+	--studio-offset-tint-amount: 0%;
+
+	--studio-primary: var(--knit-accent);
+	--studio-secondary: var(--knit-cyan);
+	--studio-link: var(--knit-accent);
+	--studio-danger: var(--knit-red);
+	--studio-warning: var(--knit-orange);
+	--studio-added: var(--knit-green);
+	--studio-deleted: var(--knit-red);
+	--studio-modified: var(--knit-orange);
+	--studio-selection-fill: var(--knit-selection);
+	--studio-selection-line: var(--knit-text);
+
+	--studio-family-sans: var(--knit-family-sans);
+	--studio-family-code: var(--knit-family-mono);
+	--studio-family-ui: var(--knit-family-sans);
+	--studio-font-size: 14px;
+	--studio-line-height: 1.45;
+	--studio-radius-xs: 3px;
+	--studio-radius-sm: 4px;
+	--studio-radius: 6px;
+	--studio-radius-md: 8px;
+	--studio-radius-lg: 10px;
+
+	--editor-line-height: 1.55;
+
+	--text-editor-fill: var(--knit-window);
+	--text-editor-line: var(--knit-text);
+	--text-editor-cursor-fill: var(--knit-accent);
+	--text-editor-selection-fill: var(--knit-selection);
+	--text-editor-selection-line: var(--knit-text);
+	--text-editor-active-line-fill: var(--knit-active-line);
+	--text-editor-active-line-line: var(--knit-text);
+	--text-editor-active-line-fill--gutter: var(--knit-active-line);
+	--text-editor-active-line-line--gutter: var(--knit-text);
+	--text-editor-gutter-fill: var(--knit-window);
+	--text-editor-gutter-line: var(--knit-gutter-text);
+	--text-editor-gutter-border: none;
+	--text-editor-gutter-font-size: 0.85em;
+	--text-editor-gutter-font-size--line-numbers: 0.85em;
+	--text-editor-tooltip-fill: var(--knit-sidebar);
+	--text-editor-tooltip-color: var(--knit-text);
+
+	--syntax-comment: var(--knit-comment);
+	--syntax-style-comment: italic;
+	--syntax-line-comment: var(--knit-comment);
+	--syntax-style-line-comment: italic;
+	--syntax-block-comment: var(--knit-comment);
+	--syntax-style-block-comment: italic;
+	--syntax-doc-comment: var(--knit-comment);
+	--syntax-style-doc-comment: italic;
+	--syntax-quote: var(--knit-comment);
+
+	--syntax-meta: var(--knit-blue);
+	--syntax-invalid: var(--knit-red);
+
+	--syntax-operator: var(--knit-cyan);
+	--syntax-punctuation: var(--knit-text-soft);
+	--syntax-angle-bracket: var(--knit-text-soft);
+	--syntax-list: var(--knit-text-soft);
+
+	--syntax-keyword: var(--knit-purple);
+	--syntax-control-keyword: var(--knit-purple);
+	--syntax-module-keyword: var(--knit-purple);
+
+	--syntax-bool: var(--knit-orange);
+	--syntax-weight-bool: normal;
+	--syntax-atom: var(--knit-orange);
+	--syntax-weight-atom: normal;
+	--syntax-number: var(--knit-orange);
+	--syntax-integer: var(--knit-orange);
+	--syntax-float: var(--knit-orange);
+	--syntax-regexp: var(--knit-cyan);
+	--syntax-namespace: var(--knit-yellow);
+
+	--syntax-type-name: var(--knit-yellow);
+	--syntax-weight-type-name: normal;
+	--syntax-class-name: var(--knit-yellow);
+	--syntax-weight-class-name: normal;
+	--syntax-type-operator: var(--knit-cyan);
+
+	--syntax-function--variable-name: var(--knit-blue);
+	--syntax-function--property-name: var(--knit-blue);
+
+	--syntax-variable-name: var(--knit-red);
+	--syntax-definition--variable-name: var(--knit-red);
+
+	--syntax-string: var(--knit-green);
+	--syntax-fill-string: transparent;
+	--syntax-special--string: var(--knit-green);
+	--syntax-escape: var(--knit-cyan);
+
+	--syntax-tag-name: var(--knit-red);
+	--syntax-attribute-name: var(--knit-orange);
+	--syntax-style-attribute-name: normal;
+
+	--syntax-strong: var(--knit-text);
+	--syntax-weight-strong: bold;
+	--syntax-emphasis: var(--knit-text);
+	--syntax-style-emphasis: italic;
+
+	--syntax-heading: var(--knit-text);
+	--syntax-weight-heading: bold;
+
+	--syntax-link: var(--knit-accent);
+	--syntax-style-link: underline;
+
+	--syntax-inserted: var(--knit-green);
+	--syntax-deleted: var(--knit-red);
+	--syntax-changed: var(--knit-orange);
+	--syntax-content-separator: var(--knit-separator);
+}
+
+[theme="knit-light"] {
+	color-scheme: light;
+
+	--knit-window: #ffffff;
+	--knit-sidebar: #f5f5f7;
+	--knit-text: #1d1d1f;
+	--knit-text-soft: #383a42;
+	--knit-gutter-text: #9d9d9f;
+	--knit-separator: #d2d2d7;
+	--knit-selection: #b3d7ff;
+	--knit-active-line: #f5f5f7;
+	--knit-accent: #007aff;
+
+	--knit-comment: #a0a1a7;
+	--knit-red: #e45649;
+	--knit-orange: #986801;
+	--knit-yellow: #c18401;
+	--knit-green: #50a14f;
+	--knit-cyan: #0184bc;
+	--knit-blue: #4078f2;
+	--knit-purple: #a626a4;
+}
+
+[theme="knit-dark"] {
+	color-scheme: dark;
+
+	--knit-window: #282c34;
+	--knit-sidebar: #21252b;
+	--knit-text: #dcdfe4;
+	--knit-text-soft: #abb2bf;
+	--knit-gutter-text: #636d83;
+	--knit-separator: #3e4451;
+	--knit-selection: #3e4451;
+	--knit-active-line: #2c313c;
+	--knit-accent: #0a84ff;
+
+	--knit-comment: #7f848e;
+	--knit-red: #e06c75;
+	--knit-orange: #d19a66;
+	--knit-yellow: #e5c07b;
+	--knit-green: #98c379;
+	--knit-cyan: #56b6c2;
+	--knit-blue: #61afef;
+	--knit-purple: #c678dd;
+}

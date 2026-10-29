@@ -54,7 +54,6 @@ jobs:
         env:
           PATCHWORK_SYSTEM_DIRECTORY: ${{ github.workspace }}/system
           PATCHWORK_FAVICON: public/patchwork-preview.svg
-          PATCHWORK_SYSTEM_PACKAGE_LIST_URL: https://base.pkg.patchwork.inkandswitch.com/modules.json
         run: |
           pnpm install --frozen-lockfile
           pnpm build

@@ -23,7 +23,10 @@ export default defineConfig({
 							useIdFactory: false
 						}
 					: undefined,
-			themeColor: {light: "#f8f8f8", dark: "#181e24"},
+			themeColor: {light: "#f5f5f7", dark: "#21252b"},
+			html: {
+				attributes: {"data-theme-light": "knit-light", "data-theme-dark": "knit-dark"},
+			},
 			icons: {
 				source: process.env.PATCHWORK_FAVICON ?? "public/patchwork.svg",
 				maskIcon: "public/mask.svg",
