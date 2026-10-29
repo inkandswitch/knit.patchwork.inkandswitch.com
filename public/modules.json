@@ -14,6 +14,7 @@
 		"./packages/add-doc-to-sidebar-button/",
 		"./packages/doc-openwith/",
 		"./packages/doc-presence/",
+		"./packages/comments-view/",
 		"./packages/threepane/",
 		"./packages/codemirror-base/",
 		"./packages/codemirror-markdown/",
