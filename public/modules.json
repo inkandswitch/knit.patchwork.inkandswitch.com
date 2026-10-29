@@ -23,6 +23,7 @@
 		"./packages/gaios-themes/",
 		"./packages/knit-themes/",
 		"./packages/tldraw5/",
-		"automerge:44VniXmDLou4ibTwWAd6K4tHZ2J4"
+		"./packages/catclock/",
+		"https://knitoutjs-panes.netlify.app"
 	]
 }
