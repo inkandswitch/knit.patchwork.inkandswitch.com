@@ -98,8 +98,8 @@
 	--syntax-function--variable-name: var(--knit-blue);
 	--syntax-function--property-name: var(--knit-blue);
 
-	--syntax-variable-name: var(--knit-red);
-	--syntax-definition--variable-name: var(--knit-red);
+	--syntax-variable-name: var(--knit-variable);
+	--syntax-definition--variable-name: var(--knit-variable);
 
 	--syntax-string: var(--knit-green);
 	--syntax-fill-string: transparent;
@@ -142,6 +142,7 @@
 
 	--knit-comment: #a0a1a7;
 	--knit-red: #e45649;
+	--knit-variable: #2b6f77;
 	--knit-orange: #986801;
 	--knit-yellow: #c18401;
 	--knit-green: #50a14f;
@@ -165,6 +166,7 @@
 
 	--knit-comment: #7f848e;
 	--knit-red: #e06c75;
+	--knit-variable: #7ab8b0;
 	--knit-orange: #d19a66;
 	--knit-yellow: #e5c07b;
 	--knit-green: #98c379;
