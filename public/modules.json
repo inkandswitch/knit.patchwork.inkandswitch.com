@@ -24,6 +24,7 @@
 		"./packages/knit-themes/",
 		"./packages/tldraw5/",
 		"./packages/catclock/",
+		"./packages/raw/",
 		"https://knitoutjs-panes.netlify.app"
 	]
 }
