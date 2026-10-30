@@ -42,6 +42,63 @@ index 43caf09..f7e918f 100644
    };
  
    // total number of selectable items (url item + datatypes)
+diff --git a/src/sideboard/create-new.tsx b/src/sideboard/create-new.tsx
+index b119c0a..0bed573 100644
+--- a/src/sideboard/create-new.tsx
++++ b/src/sideboard/create-new.tsx
+@@ -6,15 +6,19 @@ import {
+ } from "@automerge/automerge-repo/slim";
+ import {
+   type DatatypeDescription,
++  type LoadedDatatype,
+   type Plugin,
+-  createDocOfDatatype2,
+   getRegistry,
+   isLoadablePlugin,
+   isLoadedPlugin,
+ } from "@inkandswitch/patchwork-plugins";
+ import { createSignal, lazy, Show } from "solid-js";
+ import { NewDocIcon } from "./icons.tsx";
+-import type { DocLink, FolderDoc } from "@inkandswitch/patchwork-filesystem";
++import type {
++  DocLink,
++  FolderDoc,
++  HasPatchworkMetadata,
++} from "@inkandswitch/patchwork-filesystem";
+ import { docLinkFromUrl } from "./lib/doc-link.ts";
+ import type { OpenDocumentEventDetail } from "@inkandswitch/patchwork-elements";
+ import {
+@@ -23,6 +27,21 @@ import {
+   clearDropTarget,
+ } from "./dnd/dnd.ts";
+ 
++// a new doc of one of patchwork's datatypes, like patchwork-plugins'
++// createDocOfDatatype2 but recording only its type: no suggestedImportUrl
++// (or frozenImportUrl) saying where the datatype was loaded from
++async function createDocOfDatatype(
++  datatype: LoadedDatatype,
++  repo: Repo
++) {
++  const handle = await repo.create2<HasPatchworkMetadata>();
++  handle.change((doc) => {
++    datatype.module.init(doc, repo);
++    doc["@patchwork"] = { type: datatype.id };
++  });
++  return handle;
++}
++
+ export async function createNew(
+   repo: Repo,
+   datatype: Plugin<DatatypeDescription>
+@@ -37,7 +56,7 @@ export async function createNew(
+     throw new Error("plugin not loaded after loading");
+   }
+ 
+-  const docHandle = await createDocOfDatatype2(datatype, repo);
++  const docHandle = await createDocOfDatatype(datatype, repo);
+   const doc = docHandle.doc();
+   const name = datatype.module.getTitle(doc);
+ 
 diff --git a/src/sideboard/document-list/item-menu.tsx b/src/sideboard/document-list/item-menu.tsx
 index d531d50..777c79d 100644
 --- a/src/sideboard/document-list/item-menu.tsx
