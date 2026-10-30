@@ -1,0 +1,217 @@
+diff --git a/src/components/MainDocumentView.tsx b/src/components/MainDocumentView.tsx
+index e91147e..aae9de8 100644
+--- a/src/components/MainDocumentView.tsx
++++ b/src/components/MainDocumentView.tsx
+@@ -1,11 +1,26 @@
+-import type { AutomergeUrl } from "@automerge/automerge-repo/slim";
++import type { AutomergeUrl, Repo } from "@automerge/automerge-repo/slim";
++import type { RepoProviderElement } from "@inkandswitch/patchwork-providers";
++import {
++  getType,
++  type HasPatchworkMetadata,
++} from "@inkandswitch/patchwork-filesystem";
++import { getFallbackTool, getRegistry } from "@inkandswitch/patchwork-plugins";
+ import type { Accessor } from "solid-js";
+-import { Show } from "solid-js";
++import {
++  createEffect,
++  createMemo,
++  createSignal,
++  onCleanup,
++  onMount,
++  Show,
++} from "solid-js";
+ 
+ interface MainDocumentViewProps {
+   viewKey: Accessor<string | undefined>;
+   selectedDocUrl: Accessor<AutomergeUrl | undefined>;
+   toolId: Accessor<string | undefined>;
++  /** The live path the document was opened at, for the tool; not part of its key. */
++  path?: Accessor<string | undefined>;
+   // Stable container ref so callers can observe the view's bubbling
+   // `patchwork:mounted` / `patchwork:no-tool` events (see useMainDocMounted).
+   ref?: (el: HTMLDivElement) => void;
+@@ -18,16 +33,36 @@ export function MainDocumentView({
+   viewKey,
+   selectedDocUrl,
+   toolId,
++  path,
+   ref,
+ }: MainDocumentViewProps) {
++  let container!: HTMLDivElement;
++  // the repo of the nearest `<repo-provider>`, to see what the doc is before
++  // showing it: undefined until mounted, null when there's none
++  const [repo, setRepo] = createSignal<Repo | null>();
++  onMount(() => {
++    setRepo(
++      container.closest<RepoProviderElement>("repo-provider")?.repo ?? null
++    );
++  });
++
+   return (
+-    <div class="document-view" ref={ref}>
+-      <Show when={viewKey()} keyed>
+-        {(key) => {
+-          return (
+-            <patchwork-view doc-url={selectedDocUrl()!} tool-id={toolId()} />
+-          );
+-        }}
++    <div
++      class="document-view"
++      ref={(el) => {
++        container = el;
++        ref?.(el);
++      }}
++    >
++      <Show when={repo() !== undefined && viewKey()} keyed>
++        {(_key) => (
++          <DocumentView
++            url={selectedDocUrl()!}
++            toolId={toolId}
++            path={path}
++            repo={repo()!}
++          />
++        )}
+       </Show>
+       {!selectedDocUrl() && (
+         <div class="placeholder">
+@@ -37,3 +72,101 @@ export function MainDocumentView({
+     </div>
+   );
+ }
++
++// the <patchwork-view> is always told which tool, and only once that tool's
++// registered: left to itself, a doc with no tool for its datatype has it
++// offering to load the doc's suggestedImportUrl. we just say there's no tool,
++// until one arrives with a package
++function DocumentView(props: {
++  url: AutomergeUrl;
++  toolId: Accessor<string | undefined>;
++  path?: Accessor<string | undefined>;
++  repo: Repo | null;
++}) {
++  const tools = getRegistry("patchwork:tool");
++  const [toolsChanged, setToolsChanged] = createSignal(0);
++  onCleanup(
++    tools.on("changed", () => {
++      setToolsChanged((n) => n + 1);
++    })
++  );
++
++  // the doc, to see what it is: undefined while it loads, null if it can't
++  const [doc, setDoc] = createSignal<HasPatchworkMetadata | null>();
++  async function look(repo: Repo | null): Promise<void> {
++    try {
++      const handle = await repo?.find<HasPatchworkMetadata>(props.url);
++      setDoc(handle?.doc() ?? null);
++    } catch {
++      setDoc(null);
++    }
++  }
++  void look(props.repo);
++
++  const tool = createMemo(() => {
++    toolsChanged();
++    const d = doc();
++    if (d === undefined) return undefined;
++    const type = d ? getType(d) : undefined;
++    let id = props.toolId();
++    if (!id && d && type) {
++      try {
++        id = getFallbackTool(d)?.id;
++      } catch {}
++    }
++    // no datatype at all: patchwork-view says what's wrong with it
++    return { id, type, missing: !!type && !(id && tools.get(id)) };
++  });
++
++  return (
++    <Show when={tool()}>
++      {(t) => (
++        <Show
++          when={!t().missing}
++          fallback={<NoTool type={t().type!} url={props.url} />}
++        >
++          <patchwork-view
++            doc-url={props.url}
++            tool-id={t().id}
++            // Where it was opened from, as an attribute: patchwork-view's
++            // JSX typings predate `path`.
++            ref={(view: HTMLElement) =>
++              createEffect(() => {
++                const at = props.path?.();
++                if (at) view.setAttribute("path", at);
++                else view.removeAttribute("path");
++              })
++            }
++          />
++        </Show>
++      )}
++    </Show>
++  );
++}
++
++// the card for a doc nothing here can open. it settles the main view as
++// patchwork-view would, so the sidebar doesn't wait on it
++function NoTool(props: { type: string; url: AutomergeUrl }) {
++  let card!: HTMLDivElement;
++  onMount(() => {
++    card.dispatchEvent(
++      new CustomEvent("patchwork:no-tool", {
++        bubbles: true,
++        composed: true,
++        detail: { url: props.url },
++      })
++    );
++  });
++  return (
++    <div class="placeholder no-tool" ref={card}>
++      <div>
++        <h2>no tool for this</h2>
++        <p>
++          it's a <code>{props.type}</code>, and nothing here knows how to open
++          one yet.
++        </p>
++        <p>if a package brings a tool for it, it'll open right here.</p>
++      </div>
++    </div>
++  );
++}
+diff --git a/src/styles.css b/src/styles.css
+index ca0f703..acf5b3e 100644
+--- a/src/styles.css
++++ b/src/styles.css
+@@ -353,6 +353,33 @@
+   color: var(--threepane-fg);
+ }
+ 
++/* a doc nothing here has a tool for */
++.no-tool {
++  padding: var(--threepane-space-md);
++  text-align: center;
++
++  & > div {
++    max-width: 320px;
++  }
++
++  & h2 {
++    margin: 0 0 var(--threepane-space-sm);
++  }
++
++  & p {
++    margin: 0 0 var(--threepane-space);
++    color: var(--threepane-muted);
++  }
++
++  & code {
++    padding: 1px 5px;
++    border-radius: var(--threepane-radius-xs);
++    background: var(--threepane-context-sidebar-fill);
++    color: var(--threepane-fg);
++    font: 11px var(--threepane-family-code);
++  }
++}
++
+ .sidebar patchwork-view {
+   display: block;
+   width: 100%;
