@@ -1,5 +1,33 @@
+diff --git a/src/PatchworkFrame.tsx b/src/PatchworkFrame.tsx
+index 636ffbc..6ac5d8b 100644
+--- a/src/PatchworkFrame.tsx
++++ b/src/PatchworkFrame.tsx
+@@ -588,22 +588,7 @@ export function FrameLayout(props: {
+                 )}
+               </Show>
+ 
+-              <Show when={props.moduleSettingsUrl()}>
+-                {(moduleSettingsUrl) => (
+-                  <button
+-                    type="button"
+-                    class="threepane-account-bar__button"
+-                    onClick={(e) =>
+-                      dispatchOpen(e.currentTarget, {
+-                        url: moduleSettingsUrl(),
+-                        toolId: "packages",
+-                      })
+-                    }
+-                  >
+-                    Packages
+-                  </button>
+-                )}
+-              </Show>
++              {/* knit: no Packages button, for now */}
+ 
+               <button
+                 type="button"
 diff --git a/src/components/MainDocumentView.tsx b/src/components/MainDocumentView.tsx
-index e91147e..aae9de8 100644
+index e91147e..34df351 100644
 --- a/src/components/MainDocumentView.tsx
 +++ b/src/components/MainDocumentView.tsx
 @@ -1,11 +1,26 @@
@@ -75,7 +103,7 @@ index e91147e..aae9de8 100644
        </Show>
        {!selectedDocUrl() && (
          <div class="placeholder">
-@@ -37,3 +72,101 @@ export function MainDocumentView({
+@@ -37,3 +72,114 @@ export function MainDocumentView({
      </div>
    );
  }
@@ -118,7 +146,11 @@ index e91147e..aae9de8 100644
 +    let id = props.toolId();
 +    if (!id && d && type) {
 +      try {
-+        id = getFallbackTool(d)?.id;
++        const fallback = getFallbackTool(d);
++        // a "*" tool (raw) will open anything, but it isn't this datatype's
++        // tool: say there's none rather than show the doc's insides
++        if (fallback && !opensOnlyAsAnything(fallback.supportedDatatypes, type))
++          id = fallback.id;
 +      } catch {}
 +    }
 +    // no datatype at all: patchwork-view says what's wrong with it
@@ -149,6 +181,15 @@ index e91147e..aae9de8 100644
 +      )}
 +    </Show>
 +  );
++}
++
++// whether a tool takes `type` only because it takes "*"
++function opensOnlyAsAnything(
++  supported: "*" | string[],
++  type: string
++): boolean {
++  const list = supported === "*" ? ["*"] : supported;
++  return list.includes("*") && !list.includes(type);
 +}
 +
 +// the card for a doc nothing here can open. it settles the main view as
