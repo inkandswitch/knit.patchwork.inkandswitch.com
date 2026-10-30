@@ -27,10 +27,10 @@ index 636ffbc..6ac5d8b 100644
                <button
                  type="button"
 diff --git a/src/components/MainDocumentView.tsx b/src/components/MainDocumentView.tsx
-index e91147e..34df351 100644
+index e91147e..a7604e2 100644
 --- a/src/components/MainDocumentView.tsx
 +++ b/src/components/MainDocumentView.tsx
-@@ -1,11 +1,26 @@
+@@ -1,11 +1,27 @@
 -import type { AutomergeUrl } from "@automerge/automerge-repo/slim";
 +import type { AutomergeUrl, Repo } from "@automerge/automerge-repo/slim";
 +import type { RepoProviderElement } from "@inkandswitch/patchwork-providers";
@@ -47,6 +47,7 @@ index e91147e..34df351 100644
 +  createSignal,
 +  onCleanup,
 +  onMount,
++  For,
 +  Show,
 +} from "solid-js";
  
@@ -59,7 +60,7 @@ index e91147e..34df351 100644
    // Stable container ref so callers can observe the view's bubbling
    // `patchwork:mounted` / `patchwork:no-tool` events (see useMainDocMounted).
    ref?: (el: HTMLDivElement) => void;
-@@ -18,16 +33,36 @@ export function MainDocumentView({
+@@ -18,16 +34,36 @@ export function MainDocumentView({
    viewKey,
    selectedDocUrl,
    toolId,
@@ -103,7 +104,7 @@ index e91147e..34df351 100644
        </Show>
        {!selectedDocUrl() && (
          <div class="placeholder">
-@@ -37,3 +72,114 @@ export function MainDocumentView({
+@@ -37,3 +73,133 @@ export function MainDocumentView({
      </div>
    );
  }
@@ -192,6 +193,9 @@ index e91147e..34df351 100644
 +  return list.includes("*") && !list.includes(type);
 +}
 +
++// a filter per seed; the heading steps through them while you're near
++const ROUGH_SEEDS = [1, 2, 3] as const;
++
 +// the card for a doc nothing here can open. it settles the main view as
 +// patchwork-view would, so the sidebar doesn't wait on it
 +function NoTool(props: { type: string; url: AutomergeUrl }) {
@@ -206,12 +210,28 @@ index e91147e..34df351 100644
 +    );
 +  });
 +  return (
-+    <div class="placeholder no-tool" ref={card}>
-+      <div>
-+        <h2>no tool for this</h2>
++    <div class="no-tool" ref={card}>
++      {/* the heading's hand-drawn wobble, as lattice draws it */}
++      <svg class="no-tool__defs" aria-hidden="true">
++        <For each={ROUGH_SEEDS}>
++          {(seed) => (
++            <filter id={`no-tool-rough-${seed}`}>
++              <feTurbulence
++                type="fractalNoise"
++                baseFrequency="0.04"
++                numOctaves="2"
++                seed={seed}
++              />
++              <feDisplacementMap in="SourceGraphic" scale="1.4" />
++            </filter>
++          )}
++        </For>
++      </svg>
++      <div class="no-tool__card">
++        <h2 class="no-tool__rough">no tool for this</h2>
 +        <p>
-+          it's a <code>{props.type}</code>, and nothing here knows how to open
-+          one yet.
++          it's a <code class="no-tool__type">{props.type}</code>, and nothing
++          here knows how to open one yet.
 +        </p>
 +        <p>if a package brings a tool for it, it'll open right here.</p>
 +      </div>
@@ -219,38 +239,81 @@ index e91147e..34df351 100644
 +  );
 +}
 diff --git a/src/styles.css b/src/styles.css
-index ca0f703..acf5b3e 100644
+index ca0f703..37329ce 100644
 --- a/src/styles.css
 +++ b/src/styles.css
-@@ -353,6 +353,33 @@
+@@ -353,6 +353,76 @@
    color: var(--threepane-fg);
  }
  
-+/* a doc nothing here has a tool for */
++/* a doc nothing here has a tool for: the card lattice shows, in its colours */
 +.no-tool {
-+  padding: var(--threepane-space-md);
++  --no-tool-ink: var(--studio-line, #1c1a17);
++  --no-tool-muted: var(--studio-line-offset-50, color-mix(in oklab, var(--no-tool-ink) 55%, transparent));
++  --no-tool-line: var(--studio-chrome-line, var(--no-tool-ink));
++  --no-tool-sheet: var(--editor-fill, var(--text-editor-fill, var(--studio-fill, #fffdf5)));
++  --no-tool-highlighter: var(--studio-selection-fill, #ffee8888);
++  --no-tool-radius: var(--studio-radius-sm, 3px);
++  --no-tool-serif: "Fraunces", "Iowan Old Style", Palatino, Georgia, serif;
++  --no-tool-mono: var(--studio-family-code, Monaco, ui-monospace, monospace);
++
++  display: grid;
++  box-sizing: border-box;
++  height: 100%;
++  place-items: center;
++  padding: 16px;
++}
++
++.no-tool__defs {
++  position: absolute;
++  width: 0;
++  height: 0;
++}
++
++.no-tool__card {
++  max-width: 320px;
++  padding: 24px 28px 20px;
++  border: 1px solid var(--no-tool-line);
++  border-radius: 0.5em;
++  background: var(--no-tool-sheet);
++  box-shadow: 0 0 10px 2px #66003322;
 +  text-align: center;
 +
-+  & > div {
-+    max-width: 320px;
-+  }
-+
-+  & h2 {
-+    margin: 0 0 var(--threepane-space-sm);
-+  }
-+
 +  & p {
-+    margin: 0 0 var(--threepane-space);
-+    color: var(--threepane-muted);
++    margin: 0 0 12px;
++    color: var(--no-tool-muted);
 +  }
++}
 +
-+  & code {
-+    padding: 1px 5px;
-+    border-radius: var(--threepane-radius-xs);
-+    background: var(--threepane-context-sidebar-fill);
-+    color: var(--threepane-fg);
-+    font: 11px var(--threepane-family-code);
++.no-tool__type {
++  padding: 1px 5px;
++  border-radius: var(--no-tool-radius);
++  background: var(--no-tool-highlighter);
++  color: var(--no-tool-ink);
++  font: 11px var(--no-tool-mono);
++}
++
++/* the serif is drawn by hand, a little; it wobbles while you're near */
++.no-tool__rough {
++  margin: 0 0 6px;
++  font: 400 28px/1.1 var(--no-tool-serif);
++  filter: url(#no-tool-rough-1);
++
++  .no-tool__card:hover & {
++    animation: no-tool-boil 0.6s steps(1) infinite;
 +  }
++}
++
++@media (prefers-reduced-motion: reduce) {
++  .no-tool__card:hover .no-tool__rough {
++    animation: none;
++  }
++}
++
++@keyframes no-tool-boil {
++  0% { filter: url(#no-tool-rough-1); }
++  33% { filter: url(#no-tool-rough-2); }
++  66% { filter: url(#no-tool-rough-3); }
 +}
 +
  .sidebar patchwork-view {
