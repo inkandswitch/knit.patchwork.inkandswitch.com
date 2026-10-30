@@ -1,45 +1,118 @@
 diff --git a/src/sideboard/create-new-menu.tsx b/src/sideboard/create-new-menu.tsx
-index 43caf09..3d6289a 100644
+index 43caf09..f7e918f 100644
 --- a/src/sideboard/create-new-menu.tsx
 +++ b/src/sideboard/create-new-menu.tsx
-@@ -14,10 +14,15 @@ import { useFilteredDatatypes } from "./lib/solid-plugins";
+@@ -10,15 +10,10 @@ import type {
+ import { createSignal, For, Show } from "solid-js";
+ import type { DocLink } from "@inkandswitch/patchwork-filesystem";
+ import { docLinkFromUrl } from "./lib/doc-link.ts";
+-import { useFilteredDatatypes } from "./lib/solid-plugins";
++import { label, useCreatableDatatypes } from "./knit-datatypes.ts";
  import { Menu, MenuItem, type Anchor } from "./popmenu.tsx";
  import { createNew } from "./create-new.tsx";
  
-+// knit: knitoutjs projects come first, and files are made from inside them
-+const PINNED = "knitoutjs-panes";
-+const HIDDEN = new Set(["new-file"]);
-+const RENAMED: Record<string, string> = { [PINNED]: "KnitoutJS Project" };
-+
- // a broken plugin may register without a name; show its id rather than
- // letting it take the whole menu down
- const label = (d: Plugin<DatatypeDescription>) =>
+-// a broken plugin may register without a name; show its id rather than
+-// letting it take the whole menu down
+-const label = (d: Plugin<DatatypeDescription>) =>
 -  typeof d.name === "string" ? d.name : String(d.id);
-+  RENAMED[d.id] ?? (typeof d.name === "string" ? d.name : String(d.id));
- 
+-
  /**
   * The contents of the create-new dropdown: a filter input (also accepts a pasted
-@@ -28,7 +33,9 @@ function DatatypeMenuContent(props: {
+  * automerge url) and the list of datatypes. Rendered inside a <DropdownMenu> so
+@@ -28,7 +23,7 @@ function DatatypeMenuContent(props: {
    onPickDatatype(datatype: Plugin<DatatypeDescription>): void;
    onSubmitUrl(url: string): void;
  }) {
 -  const datatypes = useFilteredDatatypes((item) => !item.unlisted);
-+  const datatypes = useFilteredDatatypes(
-+    (item) => !item.unlisted && !HIDDEN.has(item.id)
-+  );
++  const datatypes = useCreatableDatatypes();
    const [query, setQuery] = createSignal("");
    const [highlightIndex, setHighlightIndex] = createSignal(0);
  
-@@ -39,7 +46,11 @@ function DatatypeMenuContent(props: {
-     const matching = q
-       ? datatypes.filter((d) => label(d).toLowerCase().includes(q))
-       : datatypes;
+@@ -36,10 +31,9 @@ function DatatypeMenuContent(props: {
+ 
+   const filteredDatatypes = () => {
+     const q = query().toLowerCase();
+-    const matching = q
+-      ? datatypes.filter((d) => label(d).toLowerCase().includes(q))
+-      : datatypes;
 -    return [...matching].sort((a, b) => label(a).localeCompare(label(b)));
-+    return [...matching].sort(
++    return q
++      ? datatypes().filter((d) => label(d).toLowerCase().includes(q))
++      : datatypes();
+   };
+ 
+   // total number of selectable items (url item + datatypes)
+diff --git a/src/sideboard/document-list/item-menu.tsx b/src/sideboard/document-list/item-menu.tsx
+index d531d50..777c79d 100644
+--- a/src/sideboard/document-list/item-menu.tsx
++++ b/src/sideboard/document-list/item-menu.tsx
+@@ -7,10 +7,8 @@ import {
+ } from "@automerge/automerge-repo/slim";
+ import type { PatchworkViewElement } from "@inkandswitch/patchwork-elements";
+ import type { FolderDoc } from "@inkandswitch/patchwork-filesystem";
+-import {
+-  useSupportedToolsForType,
+-  useFilteredDatatypes,
+-} from "../lib/solid-plugins";
++import { useSupportedToolsForType } from "../lib/solid-plugins";
++import { label, useCreatableDatatypes } from "../knit-datatypes.ts";
+ import { dragstack, clearDragstack } from "../dnd/dnd.ts";
+ import { removeItemsByUrl } from "../dnd/operations.ts";
+ import { menuTarget, setMenuTarget, type MenuTarget } from "../state.ts";
+@@ -64,7 +62,7 @@ function MenuItems(props: {
+ }) {
+   const t = props.target;
+   const tools = useSupportedToolsForType(t.type);
+-  const datatypes = useFilteredDatatypes((item) => !item.unlisted);
++  const datatypes = useCreatableDatatypes();
+   const multi = () => dragstack.has(t.id) && dragstack.size > 1;
+   const patchworkUrl = () =>
+     `${location.protocol}//${location.host}/#doc=${parseAutomergeUrl(t.url).documentId}`;
+@@ -88,10 +86,10 @@ function MenuItems(props: {
+     <>
+       <Show when={t.createInside}>
+         <SubMenu label="Create">
+-          <For each={datatypes}>
++          <For each={datatypes()}>
+             {(datatype) => (
+               <MenuItem onSelect={() => t.createInside!(datatype)}>
+-                {datatype.name}
++                {label(datatype)}
+               </MenuItem>
+             )}
+           </For>
+diff --git a/src/sideboard/knit-datatypes.ts b/src/sideboard/knit-datatypes.ts
+new file mode 100644
+index 0000000..962f0a6
+--- /dev/null
++++ b/src/sideboard/knit-datatypes.ts
+@@ -0,0 +1,29 @@
++import type {
++  DatatypeDescription,
++  Plugin,
++} from "@inkandswitch/patchwork-plugins";
++import { useFilteredDatatypes } from "./lib/solid-plugins";
++
++// knit: knitoutjs projects come first, and files are made from inside them.
++// the create-new dropdown and the right-click Create menu both list from here
++const PINNED = "knitoutjs-panes";
++const HIDDEN = new Set(["new-file"]);
++const RENAMED: Record<string, string> = { [PINNED]: "KnitoutJS Project" };
++
++// a broken plugin may register without a name; show its id rather than
++// letting it take the whole menu down
++export const label = (d: Plugin<DatatypeDescription>) =>
++  RENAMED[d.id] ?? (typeof d.name === "string" ? d.name : String(d.id));
++
++/** The datatypes you can make, in the order the menus show them. */
++export function useCreatableDatatypes() {
++  const datatypes = useFilteredDatatypes(
++    (item) => !item.unlisted && !HIDDEN.has(item.id)
++  );
++  return () =>
++    [...datatypes].sort(
 +      (a, b) =>
 +        Number(b.id === PINNED) - Number(a.id === PINNED) ||
 +        label(a).localeCompare(label(b))
 +    );
-   };
- 
-   // total number of selectable items (url item + datatypes)
++}
