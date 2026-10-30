@@ -1,0 +1,45 @@
+diff --git a/src/sideboard/create-new-menu.tsx b/src/sideboard/create-new-menu.tsx
+index 43caf09..3d6289a 100644
+--- a/src/sideboard/create-new-menu.tsx
++++ b/src/sideboard/create-new-menu.tsx
+@@ -14,10 +14,15 @@ import { useFilteredDatatypes } from "./lib/solid-plugins";
+ import { Menu, MenuItem, type Anchor } from "./popmenu.tsx";
+ import { createNew } from "./create-new.tsx";
+ 
++// knit: knitoutjs projects come first, and files are made from inside them
++const PINNED = "knitoutjs-panes";
++const HIDDEN = new Set(["new-file"]);
++const RENAMED: Record<string, string> = { [PINNED]: "KnitoutJS Project" };
++
+ // a broken plugin may register without a name; show its id rather than
+ // letting it take the whole menu down
+ const label = (d: Plugin<DatatypeDescription>) =>
+-  typeof d.name === "string" ? d.name : String(d.id);
++  RENAMED[d.id] ?? (typeof d.name === "string" ? d.name : String(d.id));
+ 
+ /**
+  * The contents of the create-new dropdown: a filter input (also accepts a pasted
+@@ -28,7 +33,9 @@ function DatatypeMenuContent(props: {
+   onPickDatatype(datatype: Plugin<DatatypeDescription>): void;
+   onSubmitUrl(url: string): void;
+ }) {
+-  const datatypes = useFilteredDatatypes((item) => !item.unlisted);
++  const datatypes = useFilteredDatatypes(
++    (item) => !item.unlisted && !HIDDEN.has(item.id)
++  );
+   const [query, setQuery] = createSignal("");
+   const [highlightIndex, setHighlightIndex] = createSignal(0);
+ 
+@@ -39,7 +46,11 @@ function DatatypeMenuContent(props: {
+     const matching = q
+       ? datatypes.filter((d) => label(d).toLowerCase().includes(q))
+       : datatypes;
+-    return [...matching].sort((a, b) => label(a).localeCompare(label(b)));
++    return [...matching].sort(
++      (a, b) =>
++        Number(b.id === PINNED) - Number(a.id === PINNED) ||
++        label(a).localeCompare(label(b))
++    );
+   };
+ 
+   // total number of selectable items (url item + datatypes)
