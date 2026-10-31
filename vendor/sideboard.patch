@@ -1,8 +1,8 @@
 diff --git a/src/sideboard/create-new-menu.tsx b/src/sideboard/create-new-menu.tsx
-index 43caf09..f7e918f 100644
+index 43caf09..91c4b50 100644
 --- a/src/sideboard/create-new-menu.tsx
 +++ b/src/sideboard/create-new-menu.tsx
-@@ -10,15 +10,10 @@ import type {
+@@ -10,14 +10,12 @@ import type {
  import { createSignal, For, Show } from "solid-js";
  import type { DocLink } from "@inkandswitch/patchwork-filesystem";
  import { docLinkFromUrl } from "./lib/doc-link.ts";
@@ -10,25 +10,28 @@ index 43caf09..f7e918f 100644
 +import { label, useCreatableDatatypes } from "./knit-datatypes.ts";
  import { Menu, MenuItem, type Anchor } from "./popmenu.tsx";
  import { createNew } from "./create-new.tsx";
++import { localFileDocLinks, pickFiles } from "./document-list/file-drop.ts";
  
 -// a broken plugin may register without a name; show its id rather than
 -// letting it take the whole menu down
 -const label = (d: Plugin<DatatypeDescription>) =>
 -  typeof d.name === "string" ? d.name : String(d.id);
--
++const LOCAL_FILE = "Local file...";
+ 
  /**
   * The contents of the create-new dropdown: a filter input (also accepts a pasted
-  * automerge url) and the list of datatypes. Rendered inside a <DropdownMenu> so
-@@ -28,7 +23,7 @@ function DatatypeMenuContent(props: {
+@@ -27,8 +25,9 @@ const label = (d: Plugin<DatatypeDescription>) =>
+ function DatatypeMenuContent(props: {
    onPickDatatype(datatype: Plugin<DatatypeDescription>): void;
    onSubmitUrl(url: string): void;
++  onPickFiles(files: File[]): void;
  }) {
 -  const datatypes = useFilteredDatatypes((item) => !item.unlisted);
 +  const datatypes = useCreatableDatatypes();
    const [query, setQuery] = createSignal("");
    const [highlightIndex, setHighlightIndex] = createSignal(0);
  
-@@ -36,10 +31,9 @@ function DatatypeMenuContent(props: {
+@@ -36,17 +35,34 @@ function DatatypeMenuContent(props: {
  
    const filteredDatatypes = () => {
      const q = query().toLowerCase();
@@ -41,12 +44,104 @@ index 43caf09..f7e918f 100644
 +      : datatypes();
    };
  
-   // total number of selectable items (url item + datatypes)
+-  // total number of selectable items (url item + datatypes)
+-  const itemCount = () => (isUrl() ? 1 : 0) + filteredDatatypes().length;
++  const showLocalFile = () =>
++    LOCAL_FILE.toLowerCase().includes(query().toLowerCase());
++
++  // the local file item comes after the datatypes
++  const localFileIndex = () => (isUrl() ? 1 : 0) + filteredDatatypes().length;
++
++  // total number of selectable items (url item + datatypes + local file)
++  const itemCount = () => localFileIndex() + (showLocalFile() ? 1 : 0);
++
++  // must run in the click (or key press) itself, for the browser to show the
++  // file picker
++  function pickLocalFiles() {
++    pickFiles().then((files) => {
++      if (files.length) props.onPickFiles(files);
++    });
++  }
+ 
+   function selectHighlighted() {
+     const idx = highlightIndex();
++    if (showLocalFile() && idx === localFileIndex()) {
++      pickLocalFiles();
++      return;
++    }
+     if (isUrl()) {
+       if (idx === 0) {
+         props.onSubmitUrl(query());
+@@ -130,6 +146,17 @@ function DatatypeMenuContent(props: {
+           </MenuItem>
+         )}
+       </For>
++      <Show when={showLocalFile()}>
++        <MenuItem
++          classList={{
++            "popmenu__item--highlighted": highlightIndex() === localFileIndex(),
++          }}
++          onSelect={pickLocalFiles}
++          onPointerMove={() => setHighlightIndex(localFileIndex())}
++        >
++          {LOCAL_FILE}
++        </MenuItem>
++      </Show>
+     </>
+   );
+ }
+@@ -143,6 +170,7 @@ export function CreateNewMenu(props: {
+   onClose(): void;
+   onPickDatatype(datatype: Plugin<DatatypeDescription>): void;
+   onSubmitUrl(url: string): void;
++  onPickFiles(files: File[]): void;
+ }) {
+   return (
+     <Menu
+@@ -154,6 +182,7 @@ export function CreateNewMenu(props: {
+       <DatatypeMenuContent
+         onPickDatatype={props.onPickDatatype}
+         onSubmitUrl={props.onSubmitUrl}
++        onPickFiles={props.onPickFiles}
+       />
+     </Menu>
+   );
+@@ -167,6 +196,8 @@ export function CreateNewMenu(props: {
+ export function NewDocPlaceholder(props: {
+   repo: Repo;
+   onCreate(docLink: DocLink): void;
++  /** files brought in from the computer, to go where the placeholder is */
++  onAdd(docLinks: DocLink[]): void;
+   onDismiss(): void;
+   clearFilter(): void;
+ }) {
+@@ -186,6 +217,13 @@ export function NewDocPlaceholder(props: {
+     props.onCreate(docLink);
+   }
+ 
++  async function pickFiles(files: File[]) {
++    const links = await localFileDocLinks(props.repo, files);
++    if (!links.length) return;
++    props.clearFilter();
++    props.onAdd(links);
++  }
++
+   return (
+     <>
+       <div ref={row} class="document-list-item document-list-placeholder">
+@@ -200,6 +238,7 @@ export function NewDocPlaceholder(props: {
+         <DatatypeMenuContent
+           onPickDatatype={pickDatatype}
+           onSubmitUrl={submitUrl}
++          onPickFiles={pickFiles}
+         />
+       </Menu>
+     </>
 diff --git a/src/sideboard/create-new.tsx b/src/sideboard/create-new.tsx
-index b119c0a..0bed573 100644
+index b119c0a..ca127a6 100644
 --- a/src/sideboard/create-new.tsx
 +++ b/src/sideboard/create-new.tsx
-@@ -6,15 +6,19 @@ import {
+@@ -6,16 +6,21 @@ import {
  } from "@automerge/automerge-repo/slim";
  import {
    type DatatypeDescription,
@@ -66,9 +161,11 @@ index b119c0a..0bed573 100644
 +  HasPatchworkMetadata,
 +} from "@inkandswitch/patchwork-filesystem";
  import { docLinkFromUrl } from "./lib/doc-link.ts";
++import { localFileDocLinks } from "./document-list/file-drop.ts";
  import type { OpenDocumentEventDetail } from "@inkandswitch/patchwork-elements";
  import {
-@@ -23,6 +27,21 @@ import {
+   NEW_DOC_DND_TYPE,
+@@ -23,6 +28,21 @@ import {
    clearDropTarget,
  } from "./dnd/dnd.ts";
  
@@ -90,7 +187,7 @@ index b119c0a..0bed573 100644
  export async function createNew(
    repo: Repo,
    datatype: Plugin<DatatypeDescription>
-@@ -37,7 +56,7 @@ export async function createNew(
+@@ -37,7 +57,7 @@ export async function createNew(
      throw new Error("plugin not loaded after loading");
    }
  
@@ -99,11 +196,351 @@ index b119c0a..0bed573 100644
    const doc = docHandle.doc();
    const name = datatype.module.getTitle(doc);
  
+@@ -91,6 +111,16 @@ export default function CreateNew(props: CreateNewProps) {
+     setOpen(false);
+   }
+ 
++  async function selectFiles(files: File[]) {
++    const links = await localFileDocLinks(props.repo, files);
++    if (!links.length) return;
++    props.changeFolder((doc) => {
++      doc.docs.push(...links);
++    });
++    props.clearFilter();
++    props.open(links[0]);
++  }
++
+   // Kobalte's menu trigger opens on pointerdown, which swallows the start of a
+   // native drag. So the visible button is a plain draggable <button> that we
+   // open the menu from on click; a 0-size aria-hidden trigger overlapping it
+@@ -164,6 +194,7 @@ export default function CreateNew(props: CreateNewProps) {
+           }}
+           onPickDatatype={selectDatatype}
+           onSubmitUrl={handleUrlSubmit}
++          onPickFiles={selectFiles}
+         />
+       </Show>
+     </div>
+diff --git a/src/sideboard/dnd/drop.test.ts b/src/sideboard/dnd/drop.test.ts
+index f2588c9..08e6b8d 100644
+--- a/src/sideboard/dnd/drop.test.ts
++++ b/src/sideboard/dnd/drop.test.ts
+@@ -1,4 +1,4 @@
+-import { describe, expect, it } from "vitest";
++import { beforeAll, describe, expect, it } from "vitest";
+ import * as A from "@automerge/automerge";
+ import type {
+   AutomergeUrl,
+@@ -6,6 +6,7 @@ import type {
+   Repo,
+ } from "@automerge/automerge-repo/slim";
+ import type { FolderDoc } from "@inkandswitch/patchwork-filesystem";
++import { getRegistry, registerPlugins } from "@inkandswitch/patchwork-plugins";
+ import { endSpot, rowSpot } from "./dnd.ts";
+ import { DropError, executeDrop } from "./operations.ts";
+ import { handleFilesDrop } from "../document-list/file-drop.ts";
+@@ -126,6 +127,53 @@ describe("handleFilesDrop", () => {
+     expect(failed).toEqual(["broken"]);
+     expect(landed.map((l) => l.index)).toEqual([1, 2]);
+   });
++
++  describe("with an archive format", () => {
++    beforeAll(async () => {
++      registerPlugins(
++        [
++          {
++            type: "patchwork:datatype",
++            id: "folder",
++            name: "Folder",
++            load: async () => ({
++              init() {},
++              getTitle: (doc: FolderDoc) => doc.title,
++            }),
++          },
++          {
++            type: "patchwork:archive",
++            id: "pack",
++            name: "Pack",
++            extension: ".pack",
++            // unpacks into a folder named for what's in the file
++            load: async () => ({
++              import: async (_repo: Repo, file: Blob) =>
++                repo.create({
++                  "@patchwork": { type: "folder" },
++                  title: await file.text(),
++                  docs: [],
++                }).url,
++            }),
++          },
++        ] as any,
++        "test://drop-archive"
++      );
++      await getRegistry("patchwork:datatype").load("folder");
++    });
++
++    it("unpacks an archive rather than adding the file", async () => {
++      const f = folder("a");
++      await handleFilesDrop(
++        [new File(["1"], "1"), new File(["Unpacked"], "thing.PACK")],
++        f,
++        repo,
++        1
++      );
++      expect(names(f)).toEqual(["a", "1", "Unpacked"]);
++      expect(f.doc()!.docs.map((doc) => doc.type)).toEqual(["x", "file", "folder"]);
++    });
++  });
+ });
+ 
+ describe("executeDrop", () => {
+diff --git a/src/sideboard/document-list/document-list.tsx b/src/sideboard/document-list/document-list.tsx
+index 7dd9b4e..f3a1671 100644
+--- a/src/sideboard/document-list/document-list.tsx
++++ b/src/sideboard/document-list/document-list.tsx
+@@ -98,29 +98,38 @@ export function DocumentList(props: DocumentListProps) {
+   const pendingHere = () =>
+     !!props.handle && pendingNewDoc()?.containerUrl === props.handle.url;
+ 
+-  // Commit the pending placeholder: insert the freshly created doc at the drop
+-  // index, open it, and drop straight into rename mode.
+-  const commitPending = (docLink: DocLink) => {
+-    const target = pendingNewDoc();
+-    if (!target) return;
+-    const index = target.index;
+-    setPendingNewDoc(null);
+-    props.handle.change((folder) => folder.docs.splice(index, 0, docLink));
+-    props.open(docLink);
+-    setRenaming(props.handle.url + "/" + index);
++  // Commit the pending placeholder: insert the docs at the drop index and open
++  // the first. It goes where the placeholder was made for even once that's
++  // been dismissed: picking from its menu with a click closes the menu (and
++  // so the placeholder) before the picked doc has been made.
++  const placeholder = () => {
++    const target = untrack(pendingNewDoc);
++    const commit = (docLinks: DocLink[]) => {
++      if (!target) return;
++      if (pendingNewDoc() === target) setPendingNewDoc(null);
++      props.handle.change((folder) =>
++        folder.docs.splice(target.index, 0, ...docLinks)
++      );
++      props.open(docLinks[0]);
++      return target.index;
++    };
++    return (
++      <div class="document-list__item document-list__item--visible">
++        <NewDocPlaceholder
++          repo={props.repo}
++          // a new doc drops straight into rename mode
++          onCreate={(docLink) => {
++            const index = commit([docLink]);
++            if (index != null) setRenaming(props.handle.url + "/" + index);
++          }}
++          onAdd={commit}
++          onDismiss={() => setPendingNewDoc(null)}
++          clearFilter={props.clearFilter}
++        />
++      </div>
++    );
+   };
+ 
+-  const placeholder = () => (
+-    <div class="document-list__item document-list__item--visible">
+-      <NewDocPlaceholder
+-        repo={props.repo}
+-        onCreate={commitPending}
+-        onDismiss={() => setPendingNewDoc(null)}
+-        clearFilter={props.clearFilter}
+-      />
+-    </div>
+-  );
+-
+   return (
+     <>
+       <For each={docs()}>
+diff --git a/src/sideboard/document-list/file-drop.ts b/src/sideboard/document-list/file-drop.ts
+index 796f47d..89f62f1 100644
+--- a/src/sideboard/document-list/file-drop.ts
++++ b/src/sideboard/document-list/file-drop.ts
+@@ -1,64 +1,130 @@
+ import type { Repo, DocHandle } from "@automerge/automerge-repo/slim";
+ import type {
++  DocLink,
+   FolderDoc,
+   HasPatchworkMetadata,
+   UnixFileEntry,
+ } from "@inkandswitch/patchwork-filesystem";
+ import type { Landed } from "../dnd/operations.ts";
+ import { log } from "../dnd/debug.ts";
++import { docLinkFromUrl } from "../lib/doc-link.ts";
++import { archiveFor, loadArchive } from "../knit-archives.ts";
+ 
+ /**
+- * Turn files dropped from the operating system into UnixFileEntry documents
+- * and insert them into `folderHandle` at `index`, in the order they were
+- * dropped. A file that can't be read is skipped and named in `failed`; the
+- * rest still go in.
++ * Turn a file from the operating system into a document: an archive (see
++ * knit-archives.ts) is unpacked and gives the doc it was made from, anything
++ * else becomes a UnixFileEntry.
+  */
+-export async function handleFilesDrop(
+-  files: Iterable<File>,
+-  folderHandle: DocHandle<FolderDoc>,
+-  repo: Repo,
+-  index: number
+-): Promise<{ landed: Landed[]; failed: string[] }> {
+-  const landed: Landed[] = [];
+-  const failed: string[] = [];
+-  let at = index;
++export async function fileDocLink(file: File, repo: Repo): Promise<DocLink> {
++  const archive = archiveFor(file.name);
++  if (archive) {
++    const url = await (await loadArchive(archive.id)).import(repo, file);
++    log("FileDrop: Unpacked archive:", file.name, url);
++    return docLinkFromUrl(repo, url);
++  }
+ 
+-  for (const file of files) {
+-    try {
+-      const content = new Uint8Array(await file.arrayBuffer());
++  const content = new Uint8Array(await file.arrayBuffer());
+ 
+-      const nameParts = file.name.split(".");
+-      const extension = nameParts.length > 1 ? nameParts.pop()! : "";
+-      const nameWithoutExt = nameParts.join(".");
++  const nameParts = file.name.split(".");
++  const extension = nameParts.length > 1 ? nameParts.pop()! : "";
++  const nameWithoutExt = nameParts.join(".");
+ 
+-      const handle = await repo.create2<UnixFileEntry & HasPatchworkMetadata>({
+-        "@patchwork": {
+-          type: "file",
+-        },
+-        content,
+-        extension,
+-        mimeType: file.type || "application/octet-stream",
+-        name: nameWithoutExt,
+-      });
++  const handle = await repo.create2<UnixFileEntry & HasPatchworkMetadata>({
++    "@patchwork": {
++      type: "file",
++    },
++    content,
++    extension,
++    mimeType: file.type || "application/octet-stream",
++    name: nameWithoutExt,
++  });
+ 
+-      // Each file goes after the one before it, so they keep their order.
+-      const insertAt = Math.min(at, folderHandle.doc()?.docs?.length ?? 0);
+-      folderHandle.change((folder) => {
+-        folder.docs.splice(insertAt, 0, {
+-          url: handle.url,
+-          name: file.name,
+-          type: "file",
+-        });
+-      });
+-      landed.push({ folderUrl: folderHandle.url, index: insertAt, url: handle.url });
+-      at = insertAt + 1;
++  log("FileDrop: Created file document:", file.name, handle.url);
++  return { url: handle.url, name: file.name, type: "file" };
++}
+ 
+-      log("FileDrop: Created file document:", file.name, handle.url);
+-    } catch (error) {
+-      log("FileDrop: Failed to create file document:", error);
+-      failed.push(file.name);
++/**
++ * fileDocLink for each of `files`, in order. A file that can't be read is
++ * skipped and named in `failed`; the rest still go in.
++ */
++export async function fileDocLinks(
++  files: Iterable<File>,
++  repo: Repo
++): Promise<{ links: DocLink[]; failed: string[] }> {
++  const all = [...files];
++  const results = await Promise.allSettled(
++    all.map((file) => fileDocLink(file, repo))
++  );
++  results.forEach((result, i) => {
++    if (result.status === "rejected") {
++      log("FileDrop: Failed to create file document:", all[i].name, result.reason);
+     }
+-  }
++  });
++  return {
++    links: results.flatMap((result) =>
++      result.status === "fulfilled" ? [result.value] : []
++    ),
++    failed: all
++      .filter((_, i) => results[i].status === "rejected")
++      .map((file) => file.name),
++  };
++}
++
++/**
++ * Bring files picked from the computer into patchwork (see fileDocLink),
++ * saying which couldn't be.
++ */
++export async function localFileDocLinks(
++  repo: Repo,
++  files: File[]
++): Promise<DocLink[]> {
++  const { links, failed } = await fileDocLinks(files, repo);
++  if (failed.length) alert(`Couldn't add ${failed.join(", ")}.`);
++  return links;
++}
++
++/**
++ * Ask for files from the computer. Resolves with none if the picker is
++ * cancelled. Has to be called while handling a click or key press.
++ */
++export function pickFiles(): Promise<File[]> {
++  return new Promise((resolve) => {
++    const input = document.createElement("input");
++    input.type = "file";
++    input.multiple = true;
++    input.hidden = true;
++    const done = () => {
++      resolve([...(input.files ?? [])]);
++      input.remove();
++    };
++    input.addEventListener("change", done);
++    input.addEventListener("cancel", done);
++    document.body.append(input);
++    input.click();
++  });
++}
+ 
++/**
++ * Turn files dropped from the operating system into documents (see
++ * fileDocLink) and insert them into `folderHandle` at `index`, in the order
++ * they were dropped. A file that can't be read is skipped and named in
++ * `failed`; the rest still go in.
++ */
++export async function handleFilesDrop(
++  files: Iterable<File>,
++  folderHandle: DocHandle<FolderDoc>,
++  repo: Repo,
++  index: number
++): Promise<{ landed: Landed[]; failed: string[] }> {
++  const { links, failed } = await fileDocLinks(files, repo);
++  const insertAt = Math.min(index, folderHandle.doc()?.docs?.length ?? 0);
++  folderHandle.change((folder) => {
++    folder.docs.splice(insertAt, 0, ...links);
++  });
++  const landed = links.map((link, i) => ({
++    folderUrl: folderHandle.url,
++    index: insertAt + i,
++    url: link.url,
++  }));
+   return { landed, failed };
+ }
 diff --git a/src/sideboard/document-list/item-menu.tsx b/src/sideboard/document-list/item-menu.tsx
-index d531d50..777c79d 100644
+index d531d50..ec6b449 100644
 --- a/src/sideboard/document-list/item-menu.tsx
 +++ b/src/sideboard/document-list/item-menu.tsx
-@@ -7,10 +7,8 @@ import {
+@@ -7,10 +7,10 @@ import {
  } from "@automerge/automerge-repo/slim";
  import type { PatchworkViewElement } from "@inkandswitch/patchwork-elements";
  import type { FolderDoc } from "@inkandswitch/patchwork-filesystem";
@@ -113,10 +550,12 @@ index d531d50..777c79d 100644
 -} from "../lib/solid-plugins";
 +import { useSupportedToolsForType } from "../lib/solid-plugins";
 +import { label, useCreatableDatatypes } from "../knit-datatypes.ts";
++import { archives, downloadArchive } from "../knit-archives.ts";
++import { localFileDocLinks, pickFiles } from "./file-drop.ts";
  import { dragstack, clearDragstack } from "../dnd/dnd.ts";
  import { removeItemsByUrl } from "../dnd/operations.ts";
  import { menuTarget, setMenuTarget, type MenuTarget } from "../state.ts";
-@@ -64,7 +62,7 @@ function MenuItems(props: {
+@@ -64,7 +64,7 @@ function MenuItems(props: {
  }) {
    const t = props.target;
    const tools = useSupportedToolsForType(t.type);
@@ -125,7 +564,24 @@ index d531d50..777c79d 100644
    const multi = () => dragstack.has(t.id) && dragstack.size > 1;
    const patchworkUrl = () =>
      `${location.protocol}//${location.host}/#doc=${parseAutomergeUrl(t.url).documentId}`;
-@@ -88,10 +86,10 @@ function MenuItems(props: {
+@@ -84,17 +84,31 @@ function MenuItems(props: {
+     await removeItemsByUrl(props.repo, props.rootFolderHandle, urls);
+   }
+ 
++  // must run in the click itself, for the browser to show the file picker
++  function addLocalFiles() {
++    pickFiles().then(async (files) => {
++      if (!files.length) return;
++      const links = await localFileDocLinks(props.repo, files);
++      if (!links.length) return;
++      const folder = await props.repo.find<FolderDoc>(t.url);
++      folder.change((doc) => {
++        doc.docs.push(...links);
++      });
++    });
++  }
++
+   return (
      <>
        <Show when={t.createInside}>
          <SubMenu label="Create">
@@ -138,6 +594,85 @@ index d531d50..777c79d 100644
                </MenuItem>
              )}
            </For>
++          <MenuItem onSelect={addLocalFiles}>Local file...</MenuItem>
+         </SubMenu>
+       </Show>
+       <Show when={tools.length}>
+@@ -135,6 +149,17 @@ function MenuItems(props: {
+           </SubMenu>
+         </Show>
+       </SubMenu>
++      <Show when={t.type === "folder"}>
++        <For each={archives()}>
++          {(archive) => (
++            <MenuItem
++              onSelect={() => downloadArchive(props.repo, archive, t.url)}
++            >
++              Download {archive.extension}
++            </MenuItem>
++          )}
++        </For>
++      </Show>
+       <MenuItem onSelect={() => t.startRenaming()}>Rename</MenuItem>
+       <MenuItem onSelect={handleRemove}>
+         {multi() ? `Remove ${dragstack.size} items` : "Remove"}
+diff --git a/src/sideboard/knit-archives.ts b/src/sideboard/knit-archives.ts
+new file mode 100644
+index 0000000..61c71b4
+--- /dev/null
++++ b/src/sideboard/knit-archives.ts
+@@ -0,0 +1,51 @@
++import type { AutomergeUrl, Repo } from "@automerge/automerge-repo/slim";
++import {
++  getRegistry,
++  type PluginDescription,
++} from "@inkandswitch/patchwork-plugins";
++
++// knit: a "patchwork:archive" plugin (the amtext package's .patchworkfolder)
++// packs a doc and every doc it links to into one file, and unpacks one again.
++// Folders can be downloaded as one from their context menu, and dropping or
++// picking a file with its extension unpacks it rather than adding the file.
++export interface ArchiveDescription extends PluginDescription {
++  /** e.g. ".patchworkfolder" */
++  extension: string;
++}
++
++export interface Archive {
++  download(repo: Repo, url: AutomergeUrl): Promise<unknown>;
++  /** resolves with the url of the doc the archive was made from */
++  import(repo: Repo, file: Blob): Promise<AutomergeUrl>;
++}
++
++const registry = () => getRegistry<ArchiveDescription>("patchwork:archive");
++
++/** The archive formats there are, for listing in a menu. */
++export const archives = () =>
++  registry().filter((archive) => typeof archive.extension === "string");
++
++/** The archive format a file with this name is in, if any. */
++export const archiveFor = (filename: string) =>
++  archives().find((archive) =>
++    filename.toLowerCase().endsWith(archive.extension.toLowerCase())
++  );
++
++export async function loadArchive(id: string): Promise<Archive> {
++  const archive = await registry().load(id);
++  if (!archive) throw new Error(`no archive format "${id}"`);
++  return archive.module as Archive;
++}
++
++export async function downloadArchive(
++  repo: Repo,
++  archive: ArchiveDescription,
++  url: AutomergeUrl
++) {
++  try {
++    await (await loadArchive(archive.id)).download(repo, url);
++  } catch (error) {
++    console.error(`sideboard: ${archive.extension} download failed`, error);
++    alert(`Couldn't download that as a ${archive.extension}.`);
++  }
++}
 diff --git a/src/sideboard/knit-datatypes.ts b/src/sideboard/knit-datatypes.ts
 new file mode 100644
 index 0000000..962f0a6
@@ -173,3 +708,188 @@ index 0000000..962f0a6
 +        label(a).localeCompare(label(b))
 +    );
 +}
+diff --git a/src/sideboard/menus.test.tsx b/src/sideboard/menus.test.tsx
+index 2c49251..5e69758 100644
+--- a/src/sideboard/menus.test.tsx
++++ b/src/sideboard/menus.test.tsx
+@@ -19,20 +19,23 @@ import { NewDocPlaceholder } from "./create-new-menu.tsx";
+ import { ItemMenu } from "./document-list/item-menu.tsx";
+ import { menuTarget, setMenuTarget, type MenuTarget } from "./state.ts";
+ 
+-const createDocOfDatatype2 = vi.fn();
+-vi.mock("@inkandswitch/patchwork-plugins", async (importOriginal) => {
+-  const actual =
+-    await importOriginal<typeof import("@inkandswitch/patchwork-plugins")>();
+-  return {
+-    ...actual,
+-    createDocOfDatatype2: (...args: unknown[]) => createDocOfDatatype2(...args),
+-  };
+-});
+-
+ const FAKE_URL = "automerge:3tmVsDzywTYecevUsD21YABfXKon" as AutomergeUrl;
+ const DOC_URL = "automerge:4MCbKQoMiEnGXchaHRH3e7kxWXVs" as AutomergeUrl;
+ const IMPORT_URL = "test://menus";
+ 
++// a repo that makes every new doc at FAKE_URL; `created` is the last one
++let created: any;
++const repo = {
++  create2: vi.fn(async () => {
++    created = {};
++    return {
++      url: FAKE_URL,
++      doc: () => created,
++      change: (fn: (doc: any) => void) => fn(created),
++    };
++  }),
++} as any;
++
+ beforeAll(async () => {
+   registerPlugins(
+     [
+@@ -98,11 +101,8 @@ let container: HTMLDivElement;
+ beforeEach(() => {
+   container = document.createElement("div");
+   document.body.append(container);
+-  createDocOfDatatype2.mockReset();
+-  createDocOfDatatype2.mockImplementation(async () => ({
+-    url: FAKE_URL,
+-    doc: () => ({}),
+-  }));
++  created = undefined;
++  repo.create2.mockClear();
+ });
+ 
+ afterEach(() => {
+@@ -187,7 +187,7 @@ const filterInput = () =>
+ 
+ describe("CreateNew", () => {
+   const props = () => ({
+-    repo: {} as any,
++    repo,
+     changeFolder: vi.fn((fn: (doc: any) => void) => fn(folder)),
+     open: vi.fn(),
+     clearFilter: vi.fn(),
+@@ -207,7 +207,7 @@ describe("CreateNew", () => {
+     mount(() => <CreateNew {...props()} />);
+     container.querySelector<HTMLElement>(".create-new-button")!.click();
+     await waitFor(menu);
+-    expect(itemTexts()).toEqual(["Markdown", "Zed"]);
++    expect(itemTexts()).toEqual(["Markdown", "Zed", "Local file..."]);
+     expect(filterInput()).toBeTruthy();
+   });
+ 
+@@ -230,7 +230,12 @@ describe("CreateNew", () => {
+       mount(() => <CreateNew {...props()} />);
+       container.querySelector<HTMLElement>(".create-new-button")!.click();
+       await waitFor(menu);
+-      expect(itemTexts()).toEqual(["Markdown", "nameless", "Zed"]);
++      expect(itemTexts()).toEqual([
++        "Markdown",
++        "nameless",
++        "Zed",
++        "Local file...",
++      ]);
+     } finally {
+       unregisterPlugins(importUrl);
+     }
+@@ -260,7 +265,7 @@ describe("CreateNew", () => {
+     await waitFor(menu);
+     click(item("Markdown"));
+     await waitFor(() => p.open.mock.calls.length);
+-    expect(createDocOfDatatype2.mock.calls[0][0].id).toBe("md");
++    expect(created["@patchwork"]).toEqual({ type: "md" });
+     expect(folder.docs).toEqual([
+       { name: "Untitled Markdown", type: "md", url: FAKE_URL },
+     ]);
+@@ -281,7 +286,7 @@ describe("CreateNew", () => {
+     key(filterInput()!, "ArrowDown");
+     key(filterInput()!, "Enter");
+     await waitFor(() => p.open.mock.calls.length);
+-    expect(createDocOfDatatype2.mock.calls[0][0].id).toBe("zed");
++    expect(created["@patchwork"]).toEqual({ type: "zed" });
+   });
+ 
+   it("closes on escape", async () => {
+@@ -312,14 +317,15 @@ describe("NewDocPlaceholder", () => {
+       clearFilter = vi.fn();
+     mount(() => (
+       <NewDocPlaceholder
+-        repo={{} as any}
++        repo={repo}
+         onCreate={onCreate}
++        onAdd={vi.fn()}
+         onDismiss={onDismiss}
+         clearFilter={clearFilter}
+       />
+     ));
+     await waitFor(menu);
+-    expect(itemTexts()).toEqual(["Markdown", "Zed"]);
++    expect(itemTexts()).toEqual(["Markdown", "Zed", "Local file..."]);
+     click(item("Zed"));
+     await waitFor(() => onCreate.mock.calls.length);
+     expect(onCreate).toHaveBeenCalledWith({
+@@ -334,8 +340,9 @@ describe("NewDocPlaceholder", () => {
+     const onDismiss = vi.fn();
+     mount(() => (
+       <NewDocPlaceholder
+-        repo={{} as any}
++        repo={repo}
+         onCreate={vi.fn()}
++        onAdd={vi.fn()}
+         onDismiss={onDismiss}
+         clearFilter={vi.fn()}
+       />
+@@ -377,7 +384,7 @@ describe("ItemMenu", () => {
+   const mountMenu = () =>
+     mount(() => (
+       <ItemMenu
+-        repo={{} as any}
++        repo={repo}
+         rootFolderHandle={rootFolderHandle}
+         element={container as any}
+       />
+@@ -472,11 +479,43 @@ describe("ItemMenu", () => {
+     await waitFor(menu);
+     click(item("Create"));
+     await waitFor(() => menus().length === 2);
+-    expect(itemTexts(menus()[1]).sort()).toEqual(["Markdown", "Zed"]);
++    expect(itemTexts(menus()[1]).sort()).toEqual([
++      "Local file...",
++      "Markdown",
++      "Zed",
++    ]);
+     click(item("Markdown"));
+     expect((target.createInside as any).mock.calls[0][0].id).toBe("md");
+   });
+ 
++  it("offers a folder as each archive format, and downloads it", async () => {
++    const download = vi.fn(async () => {});
++    const importUrl = "test://menus-archive";
++    registerPlugins(
++      [
++        {
++          type: "patchwork:archive",
++          id: "pack",
++          name: "Pack",
++          extension: ".pack",
++          load: async () => ({ download }),
++        },
++      ] as any,
++      importUrl
++    );
++    try {
++      mountMenu();
++      setMenuTarget({ ...target, type: "folder" });
++      await waitFor(menu);
++      expect(itemTexts()).toContain("Download .pack");
++      click(item("Download .pack"));
++      await waitFor(() => download.mock.calls.length);
++      expect(download).toHaveBeenCalledWith(repo, DOC_URL);
++    } finally {
++      unregisterPlugins(importUrl);
++    }
++  });
++
+   it("closes on escape and on pointerdown outside", async () => {
+     mountMenu();
+     setMenuTarget(target);
