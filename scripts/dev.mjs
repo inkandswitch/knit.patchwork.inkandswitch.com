@@ -227,6 +227,7 @@ if (base) {
 	ensureBase(base)
 }
 
+build("node", ["scripts/vendor.mjs"], root)
 build("pnpm", ["--filter", "amtext", "build:patchwork"], root)
 
 if (core) run("core", "pnpm", ["watch"], core, watchEnv)

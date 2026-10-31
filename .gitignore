@@ -1,6 +1,10 @@
 /dist/
 # built by packages/amtext (pnpm build)
 /public/packages/amtext/dist/
+# built from patchwork-pkg-base + vendor/*.patch by scripts/vendor.mjs (pnpm build)
+/.vendor/
+/public/packages/sideboard/dist/
+/public/packages/threepane/dist/
 .pushwork/
 node_modules/
 playright-report/

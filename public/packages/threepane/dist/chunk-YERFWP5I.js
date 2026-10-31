@@ -1,2 +1,0 @@
-var o=["theme-tray","llm-config-tray"],e=["add-doc-to-sidebar-button","doc-openwith","doc-presence","sync-indicator","theme-titlebar"],n="chee/document-list",i=1,a={init(t){t.frameToolId="threepane",t.documentToolbarToolIds=e.slice()},getTitle:()=>"Patchwork Account"},c={init(t){t.sidebar={widgets:[]},t.doctitle={tools:e.slice()},t.tray=o.slice(),t.version=1},getTitle:()=>"Threepane Config"};export{o as a,e as b,n as c,i as d,a as e,c as f};
-//# sourceMappingURL=chunk-YERFWP5I.js.map

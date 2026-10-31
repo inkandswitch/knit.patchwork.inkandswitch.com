@@ -13,7 +13,7 @@
 	"scripts": {
 		"dev": "node scripts/dev.mjs",
 		"serve": "vite preview",
-		"build": "pnpm --filter amtext build:patchwork && vite build",
+		"build": "node scripts/vendor.mjs && pnpm --filter amtext build:patchwork && vite build",
 		"preview": "vite preview",
 		"sync": "pnpm build && pushwork sync",
 		"test": "echo ':))'"
