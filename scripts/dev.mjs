@@ -227,6 +227,8 @@ if (base) {
 	ensureBase(base)
 }
 
+build("pnpm", ["--filter", "amtext", "build:patchwork"], root)
+
 if (core) run("core", "pnpm", ["watch"], core, watchEnv)
 if (base) run("base", "pnpm", ["watch"], base, watchEnv)
 const site = run("site", "pnpm", ["exec", "vite"], root, watchEnv)

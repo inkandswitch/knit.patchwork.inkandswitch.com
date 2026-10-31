@@ -222,27 +222,65 @@ index b119c0a..ca127a6 100644
        </Show>
      </div>
 diff --git a/src/sideboard/dnd/drop.test.ts b/src/sideboard/dnd/drop.test.ts
-index f2588c9..08e6b8d 100644
+index f2588c9..0d4037b 100644
 --- a/src/sideboard/dnd/drop.test.ts
 +++ b/src/sideboard/dnd/drop.test.ts
-@@ -1,4 +1,4 @@
+@@ -1,11 +1,15 @@
 -import { describe, expect, it } from "vitest";
 +import { beforeAll, describe, expect, it } from "vitest";
  import * as A from "@automerge/automerge";
  import type {
    AutomergeUrl,
-@@ -6,6 +6,7 @@ import type {
+   DocHandle,
    Repo,
  } from "@automerge/automerge-repo/slim";
- import type { FolderDoc } from "@inkandswitch/patchwork-filesystem";
+-import type { FolderDoc } from "@inkandswitch/patchwork-filesystem";
++import type {
++  FolderDoc,
++  UnixFileEntry,
++} from "@inkandswitch/patchwork-filesystem";
 +import { getRegistry, registerPlugins } from "@inkandswitch/patchwork-plugins";
  import { endSpot, rowSpot } from "./dnd.ts";
  import { DropError, executeDrop } from "./operations.ts";
  import { handleFilesDrop } from "../document-list/file-drop.ts";
-@@ -126,6 +127,53 @@ describe("handleFilesDrop", () => {
+@@ -126,6 +130,87 @@ describe("handleFilesDrop", () => {
      expect(failed).toEqual(["broken"]);
      expect(landed.map((l) => l.index)).toEqual([1, 2]);
    });
++
++  it("keeps text as a string, even when the browser calls it octet-stream", async () => {
++    const f = folder();
++    const octet = { type: "application/octet-stream" };
++    await handleFilesDrop(
++      [
++        new File(["a"], "a.amtext", octet),
++        new File(["k"], "k.knitout", octet),
++        new File(["j"], "j.js", { type: "text/javascript" }),
++        new File(["n"], "n.json", { type: "application/json" }),
++        new File([new Uint8Array([0, 1])], "b.bin", octet),
++      ],
++      f,
++      repo,
++      0
++    );
++    const files = await Promise.all(
++      f.doc()!.docs.map(async (d) => (await repo.find<UnixFileEntry>(d.url)).doc()!)
++    );
++    expect(files.map((file) => file.content)).toEqual([
++      "a",
++      "k",
++      "j",
++      "n",
++      new Uint8Array([0, 1]),
++    ]);
++    expect(files.map((file) => file.mimeType)).toEqual([
++      "text/plain",
++      "text/plain",
++      "text/javascript",
++      "application/json",
++      "application/octet-stream",
++    ]);
++  });
 +
 +  describe("with an archive format", () => {
 +    beforeAll(async () => {
@@ -358,10 +396,10 @@ index 7dd9b4e..f3a1671 100644
      <>
        <For each={docs()}>
 diff --git a/src/sideboard/document-list/file-drop.ts b/src/sideboard/document-list/file-drop.ts
-index 796f47d..89f62f1 100644
+index 796f47d..5807fa5 100644
 --- a/src/sideboard/document-list/file-drop.ts
 +++ b/src/sideboard/document-list/file-drop.ts
-@@ -1,64 +1,130 @@
+@@ -1,64 +1,190 @@
  import type { Repo, DocHandle } from "@automerge/automerge-repo/slim";
  import type {
 +  DocLink,
@@ -373,6 +411,59 @@ index 796f47d..89f62f1 100644
  import { log } from "../dnd/debug.ts";
 +import { docLinkFromUrl } from "../lib/doc-link.ts";
 +import { archiveFor, loadArchive } from "../knit-archives.ts";
++
++// text the browser doesn't know is text: .amtext and .knitout come in as
++// application/octet-stream (or nothing at all)
++const TEXT_EXTENSIONS = new Set([
++  "amtext",
++  "knitout",
++  "k",
++  "js",
++  "mjs",
++  "cjs",
++  "jsx",
++  "ts",
++  "mts",
++  "cts",
++  "tsx",
++  "json",
++  "jsonc",
++  "md",
++  "markdown",
++  "txt",
++  "csv",
++  "tsv",
++  "html",
++  "htm",
++  "css",
++  "svg",
++  "xml",
++  "yaml",
++  "yml",
++  "toml",
++  "ini",
++  "sh",
++  "py",
++  "log",
++]);
++
++const TEXT_MIME_TYPES = new Set([
++  "application/json",
++  "application/javascript",
++  "application/ecmascript",
++  "application/xml",
++  "application/x-sh",
++]);
++
++const isTextMimeType = (mimeType: string) => {
++  const type = mimeType.split(";")[0].trim();
++  return (
++    type.startsWith("text/") ||
++    TEXT_MIME_TYPES.has(type) ||
++    type.endsWith("+json") ||
++    type.endsWith("+xml")
++  );
++};
  
  /**
 - * Turn files dropped from the operating system into UnixFileEntry documents
@@ -381,7 +472,7 @@ index 796f47d..89f62f1 100644
 - * rest still go in.
 + * Turn a file from the operating system into a document: an archive (see
 + * knit-archives.ts) is unpacked and gives the doc it was made from, anything
-+ * else becomes a UnixFileEntry.
++ * else becomes a UnixFileEntry, whose content is a string if the file is text.
   */
 -export async function handleFilesDrop(
 -  files: Iterable<File>,
@@ -403,14 +494,21 @@ index 796f47d..89f62f1 100644
 -  for (const file of files) {
 -    try {
 -      const content = new Uint8Array(await file.arrayBuffer());
-+  const content = new Uint8Array(await file.arrayBuffer());
++  const nameParts = file.name.split(".");
++  const extension = nameParts.length > 1 ? nameParts.pop()! : "";
++  const nameWithoutExt = nameParts.join(".");
  
 -      const nameParts = file.name.split(".");
 -      const extension = nameParts.length > 1 ? nameParts.pop()! : "";
 -      const nameWithoutExt = nameParts.join(".");
-+  const nameParts = file.name.split(".");
-+  const extension = nameParts.length > 1 ? nameParts.pop()! : "";
-+  const nameWithoutExt = nameParts.join(".");
++  const isText =
++    isTextMimeType(file.type) || TEXT_EXTENSIONS.has(extension.toLowerCase());
++  const content = isText
++    ? await file.text()
++    : new Uint8Array(await file.arrayBuffer());
++  const fallbackMimeType = isText ? "text/plain" : "application/octet-stream";
++  const knownMimeType = file.type !== "application/octet-stream" && file.type;
++  const mimeType = knownMimeType || fallbackMimeType;
  
 -      const handle = await repo.create2<UnixFileEntry & HasPatchworkMetadata>({
 -        "@patchwork": {
@@ -427,7 +525,7 @@ index 796f47d..89f62f1 100644
 +    },
 +    content,
 +    extension,
-+    mimeType: file.type || "application/octet-stream",
++    mimeType,
 +    name: nameWithoutExt,
 +  });
  
@@ -477,7 +575,7 @@ index 796f47d..89f62f1 100644
 +      .map((file) => file.name),
 +  };
 +}
-+
+ 
 +/**
 + * Bring files picked from the computer into patchwork (see fileDocLink),
 + * saying which couldn't be.
@@ -511,7 +609,7 @@ index 796f47d..89f62f1 100644
 +    input.click();
 +  });
 +}
- 
++
 +/**
 + * Turn files dropped from the operating system into documents (see
 + * fileDocLink) and insert them into `folderHandle` at `index`, in the order

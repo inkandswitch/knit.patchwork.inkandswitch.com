@@ -18,7 +18,7 @@
   "scripts": {
     "build:grammar": "lezer-generator codemirror/amtext.grammar -o codemirror/parser.js",
     "build:console": "esbuild console-entry.js --bundle --format=iife --target=es2022 --outfile=patchworkfolder.console.js",
-    "build": "npm run build:grammar && npm run build:console && npm run build:patchwork",
+    "build": "pnpm build:grammar && pnpm build:console && pnpm build:patchwork",
     "build:patchwork": "node build-patchwork.mjs",
     "test": "node test.mjs && node cm-test.mjs"
   },
@@ -27,7 +27,7 @@
     "@codemirror/lint": "^6.9.7",
     "@codemirror/autocomplete": "^6.20.4",
     "@lezer/highlight": "^1.2.5",
-    "@lezer/lr": "^1.4.12"
+    "@lezer/lr": "^1.4.11"
   },
   "peerDependenciesMeta": {
     "@codemirror/language": {
@@ -56,6 +56,6 @@
     "@codemirror/view": "^6.43.15",
     "@lezer/generator": "^1.8.1",
     "@lezer/highlight": "^1.2.5",
-    "@lezer/lr": "^1.4.12"
+    "@lezer/lr": "^1.4.11"
   }
 }
