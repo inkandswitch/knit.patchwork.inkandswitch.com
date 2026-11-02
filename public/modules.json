@@ -26,6 +26,7 @@
 		"./packages/catclock/",
 		"./packages/amtext/",
 		"./packages/raw/",
-		"https://knitoutjs-panes.netlify.app"
+		"https://knitoutjs-panes.netlify.app",
+		"./packages/patternwitch/"
 	]
 }
