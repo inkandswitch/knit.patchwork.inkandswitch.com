@@ -6,8 +6,16 @@
  *
  * Docs reach each other with link("./<uuid>.amtext"). On export, any string
  * value that is exactly an automerge URL (optionally with #heads) of a doc in
- * the archive becomes a link(). Top-level @patchwork is not followed or
- * rewritten. On import, links resolve to the new docs' URLs.
+ * the archive becomes a link(). So does the URL of a part of one (as made by
+ * automerge-repo's handle.sub(), like a comment thread's refs), keeping its
+ * path: link("./<uuid>.amtext", "content", cursor(3, 8)). Its cursors are op
+ * ids, which a fresh doc won't have, so they're written as text positions and
+ * made into cursors again on import. Heads are dropped, there being no
+ * history to point into. On import, links resolve to the new docs' URLs.
+ *
+ * Not followed or rewritten: top-level @patchwork, whose mainDraftUrl (the
+ * doc's own draft history) is left out altogether, and contactUrl, which says
+ * who someone is, so stays pointing at them rather than a copy of them.
  *
  * Text with marks or block markers is written as richtext(...) from
  * Automerge.spans() and restored with Automerge.updateSpans(). Mark expand
@@ -17,16 +25,101 @@
  * No history is kept: import makes fresh docs.
  */
 
-import { parse, stringify, Counter, ImmutableString, Link, RichText } from "./amtext.js";
+import { parse, stringify, Counter, Cursor, ImmutableString, Link, RichText } from "./amtext.js";
 
 export const EXT = ".patchworkfolder";
 export const ROOT = "root.amtext";
 
-const URL_RE = /^automerge:([1-9A-HJ-NP-Za-km-z]+)(?:#.*)?$/;
-const docKey = s => {
+// ---------------------------------------------------------------- urls
+
+// automerge:<doc id>[/<path>][#<heads>]. The path is automerge-repo's: keys
+// (url-encoded, escaped with a leading \ if they start with one of \ @ { [),
+// @<list index>, url-encoded {json} matching a list item, and lastly
+// [<cursor>] or [<from cursor>-<to cursor>] for a range of text.
+const URL_RE = /^automerge:([1-9A-HJ-NP-Za-km-z]+)((?:\/[^#\s]*)?)(?:#\S*)?$/;
+
+/** { doc: "automerge:<id>", path: segments as in Link, cursors?: [from, to] }, or undefined */
+function parseUrl(s) {
   const m = URL_RE.exec(s);
-  return m ? `automerge:${m[1]}` : undefined;
-};
+  if (!m) return undefined;
+  const parts = m[2].split("/").filter(Boolean);
+  const last = parts.at(-1);
+  let cursors;
+  if (last?.startsWith("[") && last.endsWith("]")) {
+    parts.pop();
+    const inner = last.slice(1, -1);
+    const sep = inner.indexOf("-");
+    cursors = sep < 0 ? [inner, inner] : [inner.slice(0, sep), inner.slice(sep + 1)];
+    if (!cursors[0] || !cursors[1]) return undefined;
+  }
+  try {
+    return { doc: `automerge:${m[1]}`, path: parts.map(parseSegment), cursors };
+  } catch {
+    return undefined;
+  }
+}
+
+function parseSegment(s) {
+  const index = /^@(\d+)$/.exec(s);
+  if (index) return Number(index[1]);
+  if (s.startsWith("{") || s.startsWith("%7B")) {
+    const match = JSON.parse(decodeURIComponent(s));
+    if (!isPlain(match)) throw new Error(`bad match ${s}`);
+    return match;
+  }
+  if (s.startsWith("[")) throw new Error(`cursors before the end of ${s}`);
+  if (s.startsWith("%5C")) return decodeURIComponent(s.slice(3));
+  if (s.startsWith("\\")) return decodeURIComponent(s.slice(1));
+  return decodeURIComponent(s);
+}
+
+function serializeSegment(seg) {
+  if (typeof seg === "number") return `@${seg}`;
+  if (typeof seg === "string") {
+    if (seg === "") throw new Error("a url path can't have an empty key");
+    return (/^[\\@{[]/.test(seg) ? "%5C" : "") + encodeURIComponent(seg);
+  }
+  const sorted = Object.fromEntries(Object.keys(seg).sort().map(k => [k, seg[k]]));
+  return encodeURIComponent(JSON.stringify(sorted));
+}
+
+const isPlain = v => v !== null && typeof v === "object" && Object.getPrototypeOf(v) === Object.prototype;
+
+/** the keys and list indexes that `path` (which may hold { match } maps) goes through in `doc` */
+function propPath(doc, path) {
+  const props = [];
+  let v = doc;
+  for (const seg of path) {
+    if (v === null || typeof v !== "object") return undefined;
+    let prop = seg;
+    if (isPlain(seg)) {
+      if (!Array.isArray(v)) return undefined;
+      prop = v.findIndex(item => item && Object.entries(seg).every(([k, x]) => item[k] === x));
+      if (prop < 0) return undefined;
+    }
+    props.push(prop);
+    v = v[prop];
+  }
+  return props;
+}
+
+// keys whose url says who someone is (a comment's author): it stays as it is,
+// and the doc isn't brought into the archive
+const IDENTITY_KEYS = new Set(["contactUrl"]);
+
+// @patchwork keys about the doc itself rather than what's in it, which a copy
+// shouldn't have: mainDraftUrl is the doc's draft history
+const OWN_PATCHWORK_KEYS = new Set(["mainDraftUrl"]);
+
+function withoutOwnPatchworkKeys(doc) {
+  const pw = doc["@patchwork"];
+  if (!pw || typeof pw !== "object" || !Object.keys(pw).some(k => OWN_PATCHWORK_KEYS.has(k))) return doc;
+  const kept = {};
+  for (const k of Object.keys(pw)) if (!OWN_PATCHWORK_KEYS.has(k)) kept[k] = pw[k];
+  const out = {};
+  for (const k of Object.keys(doc)) out[k] = k === "@patchwork" ? kept : doc[k];
+  return out;
+}
 
 // ---------------------------------------------------------------- zip
 
@@ -217,12 +310,15 @@ export function patchworkFolder(env = {}) {
     return spans.some(s => s.type === "block" || (s.marks && Object.keys(s.marks).length)) ? spans : undefined;
   }
 
-  // visits every plain string value (and strings inside rich text marks/blocks) outside top-level @patchwork
+  // visits every plain string value (and strings inside rich text marks/blocks)
+  // outside top-level @patchwork and identity keys, calling f with the doc of
+  // each url
   function eachUrl(doc, A, f) {
-    const visit = (v, path, inRich) => {
+    const visit = (v, path, inRich, key) => {
       if (typeof v === "string") {
-        const k = docKey(v);
-        if (k) f(k);
+        if (IDENTITY_KEYS.has(key)) return;
+        const url = parseUrl(v);
+        if (url) f(url.doc);
         else if (!inRich) {
           const spans = richSpans(A, doc, path);
           if (spans) for (const s of spans) visit(s.type === "block" ? s.value : s.marks ?? {}, [], true);
@@ -235,7 +331,7 @@ export function patchworkFolder(env = {}) {
       if (A.ImmutableString && v instanceof A.ImmutableString) return;
       for (const k of Object.keys(v)) {
         if (!inRich && path.length === 0 && k === "@patchwork") continue;
-        visit(v[k], inRich ? [] : [...path, Array.isArray(v) ? Number(k) : k], inRich);
+        visit(v[k], inRich ? [] : [...path, Array.isArray(v) ? Number(k) : k], inRich, k);
       }
     };
     visit(doc, [], false);
@@ -243,7 +339,7 @@ export function patchworkFolder(env = {}) {
 
   async function collect(rootUrl) {
     const { repo, Automerge: A } = ctx();
-    const root = docKey(rootUrl);
+    const root = parseUrl(rootUrl)?.doc;
     if (!root) throw new Error(`not an automerge url: ${rootUrl}`);
     const docs = new Map();
     const failed = new Set();
@@ -271,14 +367,31 @@ export function patchworkFolder(env = {}) {
     for (const url of docs.keys()) names.set(url, url === root ? ROOT : `${crypto.randomUUID()}.amtext`);
     const enc = new TextEncoder();
     const files = [];
+    // the link for the url `s`, if it's of a doc in the archive
+    const asLink = (s, path) => {
+      if (path[0] === "@patchwork" || IDENTITY_KEYS.has(path.at(-1))) return undefined;
+      const url = parseUrl(s);
+      if (!url || !names.has(url.doc)) return undefined;
+      const file = `./${names.get(url.doc)}`;
+      if (!url.cursors) return url.path.length ? new Link(file, url.path) : file;
+      // cursors become positions in the text they're in
+      const target = docs.get(url.doc);
+      const props = propPath(target, url.path);
+      let from, to;
+      try {
+        from = props && A.getCursorPosition(target, props, url.cursors[0]);
+        to = props && A.getCursorPosition(target, props, url.cursors[1]);
+      } catch {}
+      if (!Number.isInteger(from) || !Number.isInteger(to)) {
+        console.warn("patchworkFolder: no text for the cursors in", s, "so it's kept as it is");
+        return undefined;
+      }
+      return new Link(file, [...url.path, new Cursor(from, to)]);
+    };
     for (const [url, doc] of docs) {
-      const text = stringify(doc, {
+      const text = stringify(withoutOwnPatchworkKeys(doc), {
         ...detectors(A),
-        asLink: (s, path) => {
-          if (path[0] === "@patchwork") return undefined;
-          const k = docKey(s);
-          return k && names.has(k) ? `./${names.get(k)}` : undefined;
-        },
+        asLink,
         asRichText: (_s, path) => richSpans(A, doc, path),
       });
       files.push({ name: names.get(url), data: enc.encode(text) });
@@ -322,24 +435,26 @@ export function patchworkFolder(env = {}) {
     return { handle, typed: false };
   }
 
-  function materialize(v, A, resolveLink) {
-    if (v instanceof Link) return resolveLink(v.path);
+  // resolveLink(link, inRich) -> url string, or a CursorLink for one whose
+  // cursors can only be made once the doc it's into has been filled
+  function materialize(v, A, resolveLink, inRich = false) {
+    if (v instanceof Link) return resolveLink(v, inRich);
     if (v instanceof RichText) {
       return new RichText(v.spans.map(s => (s.type === "block"
-        ? { type: "block", value: materialize(s.value, A, resolveLink) }
-        : s.marks ? { type: "text", value: s.value, marks: materialize(s.marks, A, resolveLink) }
+        ? { type: "block", value: materialize(s.value, A, resolveLink, true) }
+        : s.marks ? { type: "text", value: s.value, marks: materialize(s.marks, A, resolveLink, true) }
         : { type: "text", value: s.value })));
     }
     if (v instanceof Counter) return new A.Counter(v.value);
     if (v instanceof ImmutableString) return new A.ImmutableString(v.value);
     if (v instanceof Uint8Array) return new Uint8Array(v);
     if (v instanceof Date) return new Date(v.getTime());
-    if (Array.isArray(v)) return v.map(x => materialize(x, A, resolveLink));
+    if (Array.isArray(v)) return v.map(x => materialize(x, A, resolveLink, inRich));
     if (v !== null && typeof v === "object") {
       const o = {};
       for (const k of Object.keys(v)) {
         Object.defineProperty(o, k, {
-          value: materialize(v[k], A, resolveLink), enumerable: true, writable: true, configurable: true,
+          value: materialize(v[k], A, resolveLink, inRich), enumerable: true, writable: true, configurable: true,
         });
       }
       return o;
@@ -347,29 +462,59 @@ export function patchworkFolder(env = {}) {
     return v;
   }
 
-  // replaces RichText with "" and returns [path, spans] pairs to apply after assignment
-  function extractRich(v, path, out) {
-    if (v instanceof RichText) { out.push([path, v.spans]); return ""; }
-    if (Array.isArray(v)) return v.map((x, n) => extractRich(x, [...path, n], out));
+  // a url whose cursors are made from positions once `file`'s doc is filled
+  class CursorLink {
+    constructor(file, url, path, cursor) { Object.assign(this, { file, url, path, cursor }); }
+  }
+
+  // replaces values that are `is` with `placeholder`, pushing [path, value]
+  // pairs to put in after assignment onto `out`
+  function extract(v, is, placeholder, out, path = []) {
+    if (is(v)) { out.push([path, v]); return placeholder; }
+    if (Array.isArray(v)) return v.map((x, n) => extract(x, is, placeholder, out, [...path, n]));
     if (isPlain(v)) {
-      for (const k of Object.keys(v)) v[k] = extractRich(v[k], [...path, k], out);
+      for (const k of Object.keys(v)) v[k] = extract(v[k], is, placeholder, out, [...path, k]);
     }
     return v;
   }
-  const isPlain = v => v !== null && typeof v === "object" && Object.getPrototypeOf(v) === Object.prototype;
 
+  /** fills the doc, returning the [path, CursorLink] pairs left to set */
   function fill(handle, content, typed, A) {
     const skip = k => typed && k === "@patchwork";
     const rich = [];
-    content = extractRich(content, [], rich);
+    const cursorLinks = [];
+    content = extract(content, v => v instanceof CursorLink, null, cursorLinks);
+    content = extract(content, v => v instanceof RichText, "", rich);
     if (rich.length && !A.updateSpans) throw new Error("this Automerge has no updateSpans; can't import richtext()");
     handle.change(d => {
       for (const k of Object.keys(d)) if (!skip(k) && !Object.hasOwn(content, k)) delete d[k];
       for (const k of Object.keys(content)) if (!skip(k)) d[k] = content[k];
-      for (const [path, spans] of rich) {
+      for (const [path, { spans }] of rich) {
         if (!skip(path[0])) A.updateSpans(d, path, spans, spanConfig);
       }
     });
+    return cursorLinks.filter(([path]) => !skip(path[0]));
+  }
+
+  /** the url of `link`'s range of text, in the (filled) doc `target` */
+  function cursorUrl(A, target, link) {
+    const props = propPath(target, link.path);
+    let from, to;
+    try {
+      from = props && A.getCursor(target, props, link.cursor.from);
+      to = props && A.getCursor(target, props, link.cursor.to);
+    } catch {}
+    if (!from || !to) {
+      console.warn("patchworkFolder: no text at", link.url, "for its cursors, so they're left off");
+      return link.url;
+    }
+    return `${link.url}/[${from === to ? from : `${from}-${to}`}]`;
+  }
+
+  function setAt(doc, path, value) {
+    let v = doc;
+    for (const k of path.slice(0, -1)) v = v[k];
+    v[path.at(-1)] = value;
   }
   const spanConfig = env.spanConfig; // { defaultExpand, perMarkExpand } passed through to updateSpans
 
@@ -424,10 +569,29 @@ export function patchworkFolder(env = {}) {
       created.set(p, c);
       urls.set(p, c.handle.url);
     }
+    const linkUrl = (p, link, inRich) => {
+      const file = resolvePath(p, link.path);
+      const last = link.segments.at(-1);
+      const cursor = last instanceof Cursor ? last : undefined;
+      const path = cursor ? link.segments.slice(0, -1) : link.segments;
+      const url = [urls.get(file), ...path.map(serializeSegment)].join("/");
+      if (!cursor) return url;
+      if (inRich) {
+        console.warn(`patchworkFolder: ${p}: cursors in rich text aren't supported, so they're left off`, url);
+        return url;
+      }
+      return new CursorLink(file, url, path, cursor);
+    };
+    const toSet = [];
     for (const [p, v] of files) {
-      const content = materialize(v, A, rel => urls.get(resolvePath(p, rel)));
+      const content = materialize(v, A, (link, inRich) => linkUrl(p, link, inRich));
       const { handle, typed } = created.get(p);
-      fill(handle, content, typed, A);
+      for (const [path, link] of fill(handle, content, typed, A)) toSet.push([handle, path, link]);
+    }
+    // every doc has its text now, so cursors can be made in it
+    for (const [handle, path, link] of toSet) {
+      const url = cursorUrl(A, created.get(link.file).handle.doc(), link);
+      handle.change(d => setAt(d, path, url));
     }
     return { root: urls.get(rootPath), urls };
   }
@@ -471,7 +635,7 @@ export function patchworkFolder(env = {}) {
   async function exportDocText(url) {
     const { repo, Automerge: A } = ctx();
     const doc = await readDoc(repo, url);
-    return stringify(doc, { ...detectors(A), asRichText: (_s, path) => richSpans(A, doc, path) });
+    return stringify(withoutOwnPatchworkKeys(doc), { ...detectors(A), asRichText: (_s, path) => richSpans(A, doc, path) });
   }
 
   /** one amtext doc -> new doc url. link() is not allowed here. */

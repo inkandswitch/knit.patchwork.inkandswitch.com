@@ -15,6 +15,10 @@
  *     big bytes64("AQID")            // Uint8Array, base64
  *     at date("2026-10-30T00:00:00.000Z")   // Date (also accepts ms number)
  *     child link("./other.amtext")   // url of another doc in the same folder archive
+ *     ref link("./other.amtext", "content", cursor(3, 8))
+ *                                    // url of a part of one: like handle.sub(...), a path of
+ *                                    // keys, list indexes and { match } maps, optionally
+ *                                    // ending in cursor(from, to) (text positions)
  *     "key with space" [ 1, 2, 3 ]
  *     content richtext(              // text with marks and block markers (Automerge spans)
  *       block({ type string("heading"), parents [], attrs { level 1 } })
@@ -30,6 +34,7 @@
  * - `//` starts a line comment.
  * - richtext() takes, in order: plain strings (unmarked text), text(string, { marks }),
  *   and block({ any map }). Mark values: string, number, bool, null, date(), bytes(), link().
+ * - cursor(at) or cursor(from, to) only goes last in a link().
  */
 
 export class Counter {
@@ -38,8 +43,17 @@ export class Counter {
 export class ImmutableString {
   constructor(value) { this.value = value; }
 }
+/**
+ * path: the doc's file in the archive. segments: a path within the doc, as in
+ * automerge-repo's handle.sub(...): string keys, number list indexes, { match }
+ * maps, and lastly maybe a Cursor
+ */
 export class Link {
-  constructor(path) { this.path = path; }
+  constructor(path, segments = []) { this.path = path; this.segments = segments; }
+}
+/** a range of text, by position (from === to for a single point) */
+export class Cursor {
+  constructor(from, to = from) { this.from = from; this.to = to; }
 }
 /** spans: Array<{ type: "text", value: string, marks?: object } | { type: "block", value: object }> */
 export class RichText {
@@ -61,7 +75,7 @@ export class AmtextSyntaxError extends Error {
   }
 }
 
-export const FUNCTIONS = ["counter", "string", "bytes", "bytes64", "date", "link", "richtext", "text", "block"];
+export const FUNCTIONS = ["counter", "string", "bytes", "bytes64", "date", "link", "cursor", "richtext", "text", "block"];
 
 const IDENT_START = /[A-Za-z_@$]/;
 const IDENT_CHAR = /[A-Za-z0-9_@$-]/;
@@ -190,9 +204,25 @@ export function parse(src) {
     return fail("richtext() takes strings, text() and block()");
   }
 
-  function parseCall(name, at) {
+  function parseLink(at) {
+    const args = parseArgs("link", at, () => parseValue(true));
+    const [path, ...segments] = args;
+    if (typeof path !== "string") fail("link() takes a path string, then the path within that doc", at);
+    segments.forEach((seg, n) => {
+      if (seg instanceof Cursor) {
+        if (n !== segments.length - 1) fail("cursor() goes last in link()", at);
+      } else if (typeof seg !== "string" && !(Number.isInteger(seg) && seg >= 0) && !isPlainMap(seg)) {
+        fail("link() path segments are keys, list indexes, { match } maps and a last cursor()", at);
+      }
+    });
+    return new Link(path, segments);
+  }
+
+  function parseCall(name, at, inLink) {
     if (name === "richtext") return new RichText(parseArgs(name, at, parseRichItem));
     if (name === "text" || name === "block") fail(`${name}() only goes inside richtext()`, at);
+    if (name === "link") return parseLink(at);
+    if (name === "cursor" && !inLink) fail("cursor() only goes inside link()", at);
     const args = parseArgs(name, at);
     const one = (pred, what) => {
       if (args.length !== 1 || !pred(args[0])) fail(`${name}() takes ${what}`, at);
@@ -215,8 +245,11 @@ export function parse(src) {
         if (Number.isNaN(d.getTime())) fail("invalid date", at);
         return d;
       }
-      case "link":
-        return new Link(one(a => typeof a === "string", "one path string"));
+      case "cursor": {
+        const position = a => Number.isInteger(a) && a >= 0;
+        if (args.length < 1 || args.length > 2 || !args.every(position)) fail("cursor() takes one or two text positions", at);
+        return new Cursor(...args);
+      }
       default:
         return fail(`unknown function ${name}()`, at);
     }
@@ -254,7 +287,7 @@ export function parse(src) {
     }
   }
 
-  function parseValue() {
+  function parseValue(inLink = false) {
     skip();
     const c = src[i];
     if (c === undefined) fail("unexpected end of input");
@@ -269,7 +302,7 @@ export function parse(src) {
       if (word === "true") return true;
       if (word === "false") return false;
       if (word === "null") return null;
-      if (src[i] === "(") return parseCall(word, at);
+      if (src[i] === "(") return parseCall(word, at, inLink);
       fail(`unexpected word "${word}"`, at);
     }
     fail(`unexpected character ${JSON.stringify(c)}`);
@@ -287,7 +320,7 @@ export function parse(src) {
  * opts:
  *   asCounter(v)          -> number | undefined     (recognise a foreign Counter, e.g. Automerge's)
  *   asImmutableString(v)  -> string | undefined
- *   asLink(str, path)     -> link path | undefined  (turn a string into link(...)); path = key path
+ *   asLink(str, path)     -> link path | Link | undefined  (turn a string into link(...)); path = key path
  *   asRichText(str, path) -> spans | undefined      (write a text string as richtext(...))
  *   indent                -> default "  "
  */
@@ -307,6 +340,15 @@ export function stringify(doc, opts = {}) {
   };
 
   const key = k => (BARE_KEY.test(k) ? k : JSON.stringify(k));
+
+  function writeLink(link, depth) {
+    const segments = link.segments.map(seg => {
+      if (seg instanceof Cursor) return seg.from === seg.to ? `cursor(${seg.from})` : `cursor(${seg.from}, ${seg.to})`;
+      if (typeof seg === "string") return JSON.stringify(seg);
+      return write(seg, depth + 1, [], { inline: true, plain: true });
+    });
+    return `link(${[JSON.stringify(link.path), ...segments].join(", ")})`;
+  }
 
   function writeRich(spans, depth, path) {
     if (!spans.length) return "richtext()";
@@ -328,7 +370,9 @@ export function stringify(doc, opts = {}) {
       return Object.is(v, -0) ? "0" : String(v);
     }
     if (typeof v === "string") {
+      if (mode.plain) return str(v);
       const l = asLink?.(v, path);
+      if (l instanceof Link) return writeLink(l, depth);
       if (l !== undefined) return `link(${JSON.stringify(l)})`;
       if (!mode.inRich) {
         const spans = asRichText?.(v, path);
@@ -340,7 +384,7 @@ export function stringify(doc, opts = {}) {
     if (c !== undefined) return `counter(${c})`;
     const im = v instanceof ImmutableString ? v.value : asImmutableString?.(v);
     if (im !== undefined) return `string(${str(im)})`;
-    if (v instanceof Link) return `link(${JSON.stringify(v.path)})`;
+    if (v instanceof Link) return writeLink(v, depth);
     if (v instanceof RichText) return writeRich(v.spans, depth, path);
     if (v instanceof Uint8Array) {
       return v.length <= 64 ? `bytes(${Array.from(v).join(", ")})` : `bytes64(${JSON.stringify(b64encode(v))})`;

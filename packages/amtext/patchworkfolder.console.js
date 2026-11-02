@@ -1,3 +1,4 @@
+"use strict";
 (() => {
   var __defProp = Object.defineProperty;
   var __export = (target, all) => {
@@ -10,6 +11,7 @@
   __export(amtext_exports, {
     AmtextSyntaxError: () => AmtextSyntaxError,
     Counter: () => Counter,
+    Cursor: () => Cursor,
     FUNCTIONS: () => FUNCTIONS,
     ImmutableString: () => ImmutableString,
     Link: () => Link,
@@ -28,8 +30,15 @@
     }
   };
   var Link = class {
-    constructor(path) {
+    constructor(path, segments = []) {
       this.path = path;
+      this.segments = segments;
+    }
+  };
+  var Cursor = class {
+    constructor(from, to = from) {
+      this.from = from;
+      this.to = to;
     }
   };
   var RichText = class {
@@ -54,7 +63,7 @@
       this.column = col;
     }
   };
-  var FUNCTIONS = ["counter", "string", "bytes", "bytes64", "date", "link", "richtext", "text", "block"];
+  var FUNCTIONS = ["counter", "string", "bytes", "bytes64", "date", "link", "cursor", "richtext", "text", "block"];
   var IDENT_START = /[A-Za-z_@$]/;
   var IDENT_CHAR = /[A-Za-z0-9_@$-]/;
   var BARE_KEY = /^[A-Za-z_@$][A-Za-z0-9_@$-]*$/;
@@ -181,9 +190,24 @@
       }
       return fail("richtext() takes strings, text() and block()");
     }
-    function parseCall(name, at) {
+    function parseLink(at) {
+      const args = parseArgs("link", at, () => parseValue(true));
+      const [path, ...segments] = args;
+      if (typeof path !== "string") fail("link() takes a path string, then the path within that doc", at);
+      segments.forEach((seg, n) => {
+        if (seg instanceof Cursor) {
+          if (n !== segments.length - 1) fail("cursor() goes last in link()", at);
+        } else if (typeof seg !== "string" && !(Number.isInteger(seg) && seg >= 0) && !isPlainMap(seg)) {
+          fail("link() path segments are keys, list indexes, { match } maps and a last cursor()", at);
+        }
+      });
+      return new Link(path, segments);
+    }
+    function parseCall(name, at, inLink) {
       if (name === "richtext") return new RichText(parseArgs(name, at, parseRichItem));
       if (name === "text" || name === "block") fail(`${name}() only goes inside richtext()`, at);
+      if (name === "link") return parseLink(at);
+      if (name === "cursor" && !inLink) fail("cursor() only goes inside link()", at);
       const args = parseArgs(name, at);
       const one = (pred, what) => {
         if (args.length !== 1 || !pred(args[0])) fail(`${name}() takes ${what}`, at);
@@ -210,8 +234,11 @@
           if (Number.isNaN(d.getTime())) fail("invalid date", at);
           return d;
         }
-        case "link":
-          return new Link(one((a) => typeof a === "string", "one path string"));
+        case "cursor": {
+          const position = (a) => Number.isInteger(a) && a >= 0;
+          if (args.length < 1 || args.length > 2 || !args.every(position)) fail("cursor() takes one or two text positions", at);
+          return new Cursor(...args);
+        }
         default:
           return fail(`unknown function ${name}()`, at);
       }
@@ -252,7 +279,7 @@
         arr.push(parseValue());
       }
     }
-    function parseValue() {
+    function parseValue(inLink = false) {
       skip();
       const c = src[i];
       if (c === void 0) fail("unexpected end of input");
@@ -267,7 +294,7 @@
         if (word === "true") return true;
         if (word === "false") return false;
         if (word === "null") return null;
-        if (src[i] === "(") return parseCall(word, at);
+        if (src[i] === "(") return parseCall(word, at, inLink);
         fail(`unexpected word "${word}"`, at);
       }
       fail(`unexpected character ${JSON.stringify(c)}`);
@@ -293,6 +320,14 @@
       return JSON.stringify(s);
     };
     const key = (k) => BARE_KEY.test(k) ? k : JSON.stringify(k);
+    function writeLink(link, depth) {
+      const segments = link.segments.map((seg) => {
+        if (seg instanceof Cursor) return seg.from === seg.to ? `cursor(${seg.from})` : `cursor(${seg.from}, ${seg.to})`;
+        if (typeof seg === "string") return JSON.stringify(seg);
+        return write(seg, depth + 1, [], { inline: true, plain: true });
+      });
+      return `link(${[JSON.stringify(link.path), ...segments].join(", ")})`;
+    }
     function writeRich(spans, depth, path) {
       if (!spans.length) return "richtext()";
       const inner = { inline: true, inRich: true };
@@ -314,7 +349,9 @@ ${pad(depth)})`;
         return Object.is(v, -0) ? "0" : String(v);
       }
       if (typeof v === "string") {
+        if (mode.plain) return str(v);
         const l = asLink?.(v, path);
+        if (l instanceof Link) return writeLink(l, depth);
         if (l !== void 0) return `link(${JSON.stringify(l)})`;
         if (!mode.inRich) {
           const spans = asRichText?.(v, path);
@@ -326,7 +363,7 @@ ${pad(depth)})`;
       if (c !== void 0) return `counter(${c})`;
       const im = v instanceof ImmutableString ? v.value : asImmutableString?.(v);
       if (im !== void 0) return `string(${str(im)})`;
-      if (v instanceof Link) return `link(${JSON.stringify(v.path)})`;
+      if (v instanceof Link) return writeLink(v, depth);
       if (v instanceof RichText) return writeRich(v.spans, depth, path);
       if (v instanceof Uint8Array) {
         return v.length <= 64 ? `bytes(${Array.from(v).join(", ")})` : `bytes64(${JSON.stringify(b64encode(v))})`;
@@ -367,11 +404,76 @@ ${pad(depth)}}`;
   // patchworkfolder.js
   var EXT = ".patchworkfolder";
   var ROOT = "root.amtext";
-  var URL_RE = /^automerge:([1-9A-HJ-NP-Za-km-z]+)(?:#.*)?$/;
-  var docKey = (s) => {
+  var URL_RE = /^automerge:([1-9A-HJ-NP-Za-km-z]+)((?:\/[^#\s]*)?)(?:#\S*)?$/;
+  function parseUrl(s) {
     const m = URL_RE.exec(s);
-    return m ? `automerge:${m[1]}` : void 0;
-  };
+    if (!m) return void 0;
+    const parts = m[2].split("/").filter(Boolean);
+    const last = parts.at(-1);
+    let cursors;
+    if (last?.startsWith("[") && last.endsWith("]")) {
+      parts.pop();
+      const inner = last.slice(1, -1);
+      const sep = inner.indexOf("-");
+      cursors = sep < 0 ? [inner, inner] : [inner.slice(0, sep), inner.slice(sep + 1)];
+      if (!cursors[0] || !cursors[1]) return void 0;
+    }
+    try {
+      return { doc: `automerge:${m[1]}`, path: parts.map(parseSegment), cursors };
+    } catch {
+      return void 0;
+    }
+  }
+  function parseSegment(s) {
+    const index = /^@(\d+)$/.exec(s);
+    if (index) return Number(index[1]);
+    if (s.startsWith("{") || s.startsWith("%7B")) {
+      const match = JSON.parse(decodeURIComponent(s));
+      if (!isPlain(match)) throw new Error(`bad match ${s}`);
+      return match;
+    }
+    if (s.startsWith("[")) throw new Error(`cursors before the end of ${s}`);
+    if (s.startsWith("%5C")) return decodeURIComponent(s.slice(3));
+    if (s.startsWith("\\")) return decodeURIComponent(s.slice(1));
+    return decodeURIComponent(s);
+  }
+  function serializeSegment(seg) {
+    if (typeof seg === "number") return `@${seg}`;
+    if (typeof seg === "string") {
+      if (seg === "") throw new Error("a url path can't have an empty key");
+      return (/^[\\@{[]/.test(seg) ? "%5C" : "") + encodeURIComponent(seg);
+    }
+    const sorted = Object.fromEntries(Object.keys(seg).sort().map((k) => [k, seg[k]]));
+    return encodeURIComponent(JSON.stringify(sorted));
+  }
+  var isPlain = (v) => v !== null && typeof v === "object" && Object.getPrototypeOf(v) === Object.prototype;
+  function propPath(doc, path) {
+    const props = [];
+    let v = doc;
+    for (const seg of path) {
+      if (v === null || typeof v !== "object") return void 0;
+      let prop = seg;
+      if (isPlain(seg)) {
+        if (!Array.isArray(v)) return void 0;
+        prop = v.findIndex((item) => item && Object.entries(seg).every(([k, x]) => item[k] === x));
+        if (prop < 0) return void 0;
+      }
+      props.push(prop);
+      v = v[prop];
+    }
+    return props;
+  }
+  var IDENTITY_KEYS = /* @__PURE__ */ new Set(["contactUrl"]);
+  var OWN_PATCHWORK_KEYS = /* @__PURE__ */ new Set(["mainDraftUrl"]);
+  function withoutOwnPatchworkKeys(doc) {
+    const pw = doc["@patchwork"];
+    if (!pw || typeof pw !== "object" || !Object.keys(pw).some((k) => OWN_PATCHWORK_KEYS.has(k))) return doc;
+    const kept = {};
+    for (const k of Object.keys(pw)) if (!OWN_PATCHWORK_KEYS.has(k)) kept[k] = pw[k];
+    const out = {};
+    for (const k of Object.keys(doc)) out[k] = k === "@patchwork" ? kept : doc[k];
+    return out;
+  }
   var CRC_TABLE = (() => {
     const t = new Uint32Array(256);
     for (let n = 0; n < 256; n++) {
@@ -541,10 +643,11 @@ ${pad(depth)}}`;
       return spans.some((s) => s.type === "block" || s.marks && Object.keys(s.marks).length) ? spans : void 0;
     }
     function eachUrl(doc, A, f) {
-      const visit = (v, path, inRich) => {
+      const visit = (v, path, inRich, key) => {
         if (typeof v === "string") {
-          const k = docKey(v);
-          if (k) f(k);
+          if (IDENTITY_KEYS.has(key)) return;
+          const url = parseUrl(v);
+          if (url) f(url.doc);
           else if (!inRich) {
             const spans = richSpans(A, doc, path);
             if (spans) for (const s of spans) visit(s.type === "block" ? s.value : s.marks ?? {}, [], true);
@@ -557,14 +660,14 @@ ${pad(depth)}}`;
         if (A.ImmutableString && v instanceof A.ImmutableString) return;
         for (const k of Object.keys(v)) {
           if (!inRich && path.length === 0 && k === "@patchwork") continue;
-          visit(v[k], inRich ? [] : [...path, Array.isArray(v) ? Number(k) : k], inRich);
+          visit(v[k], inRich ? [] : [...path, Array.isArray(v) ? Number(k) : k], inRich, k);
         }
       };
       visit(doc, [], false);
     }
     async function collect(rootUrl) {
       const { repo, Automerge: A } = ctx();
-      const root = docKey(rootUrl);
+      const root = parseUrl(rootUrl)?.doc;
       if (!root) throw new Error(`not an automerge url: ${rootUrl}`);
       const docs = /* @__PURE__ */ new Map();
       const failed = /* @__PURE__ */ new Set();
@@ -591,14 +694,30 @@ ${pad(depth)}}`;
       for (const url of docs.keys()) names.set(url, url === root ? ROOT : `${crypto.randomUUID()}.amtext`);
       const enc = new TextEncoder();
       const files = [];
+      const asLink = (s, path) => {
+        if (path[0] === "@patchwork" || IDENTITY_KEYS.has(path.at(-1))) return void 0;
+        const url = parseUrl(s);
+        if (!url || !names.has(url.doc)) return void 0;
+        const file = `./${names.get(url.doc)}`;
+        if (!url.cursors) return url.path.length ? new Link(file, url.path) : file;
+        const target = docs.get(url.doc);
+        const props = propPath(target, url.path);
+        let from, to;
+        try {
+          from = props && A.getCursorPosition(target, props, url.cursors[0]);
+          to = props && A.getCursorPosition(target, props, url.cursors[1]);
+        } catch {
+        }
+        if (!Number.isInteger(from) || !Number.isInteger(to)) {
+          console.warn("patchworkFolder: no text for the cursors in", s, "so it's kept as it is");
+          return void 0;
+        }
+        return new Link(file, [...url.path, new Cursor(from, to)]);
+      };
       for (const [url, doc] of docs) {
-        const text = stringify(doc, {
+        const text = stringify(withoutOwnPatchworkKeys(doc), {
           ...detectors(A),
-          asLink: (s, path) => {
-            if (path[0] === "@patchwork") return void 0;
-            const k = docKey(s);
-            return k && names.has(k) ? `./${names.get(k)}` : void 0;
-          },
+          asLink,
           asRichText: (_s, path) => richSpans(A, doc, path)
         });
         files.push({ name: names.get(url), data: enc.encode(text) });
@@ -640,21 +759,21 @@ ${pad(depth)}}`;
       if (hive && plugins?.isKeyhiveDoc?.(handle.url)) await hive.addSyncServerRelayToDoc(handle.url);
       return { handle, typed: false };
     }
-    function materialize(v, A, resolveLink) {
-      if (v instanceof Link) return resolveLink(v.path);
+    function materialize(v, A, resolveLink, inRich = false) {
+      if (v instanceof Link) return resolveLink(v, inRich);
       if (v instanceof RichText) {
-        return new RichText(v.spans.map((s) => s.type === "block" ? { type: "block", value: materialize(s.value, A, resolveLink) } : s.marks ? { type: "text", value: s.value, marks: materialize(s.marks, A, resolveLink) } : { type: "text", value: s.value }));
+        return new RichText(v.spans.map((s) => s.type === "block" ? { type: "block", value: materialize(s.value, A, resolveLink, true) } : s.marks ? { type: "text", value: s.value, marks: materialize(s.marks, A, resolveLink, true) } : { type: "text", value: s.value }));
       }
       if (v instanceof Counter) return new A.Counter(v.value);
       if (v instanceof ImmutableString) return new A.ImmutableString(v.value);
       if (v instanceof Uint8Array) return new Uint8Array(v);
       if (v instanceof Date) return new Date(v.getTime());
-      if (Array.isArray(v)) return v.map((x) => materialize(x, A, resolveLink));
+      if (Array.isArray(v)) return v.map((x) => materialize(x, A, resolveLink, inRich));
       if (v !== null && typeof v === "object") {
         const o = {};
         for (const k of Object.keys(v)) {
           Object.defineProperty(o, k, {
-            value: materialize(v[k], A, resolveLink),
+            value: materialize(v[k], A, resolveLink, inRich),
             enumerable: true,
             writable: true,
             configurable: true
@@ -664,30 +783,56 @@ ${pad(depth)}}`;
       }
       return v;
     }
-    function extractRich(v, path, out) {
-      if (v instanceof RichText) {
-        out.push([path, v.spans]);
-        return "";
+    class CursorLink {
+      constructor(file, url, path, cursor) {
+        Object.assign(this, { file, url, path, cursor });
       }
-      if (Array.isArray(v)) return v.map((x, n) => extractRich(x, [...path, n], out));
+    }
+    function extract(v, is, placeholder, out, path = []) {
+      if (is(v)) {
+        out.push([path, v]);
+        return placeholder;
+      }
+      if (Array.isArray(v)) return v.map((x, n) => extract(x, is, placeholder, out, [...path, n]));
       if (isPlain(v)) {
-        for (const k of Object.keys(v)) v[k] = extractRich(v[k], [...path, k], out);
+        for (const k of Object.keys(v)) v[k] = extract(v[k], is, placeholder, out, [...path, k]);
       }
       return v;
     }
-    const isPlain = (v) => v !== null && typeof v === "object" && Object.getPrototypeOf(v) === Object.prototype;
     function fill(handle, content, typed, A) {
       const skip = (k) => typed && k === "@patchwork";
       const rich = [];
-      content = extractRich(content, [], rich);
+      const cursorLinks = [];
+      content = extract(content, (v) => v instanceof CursorLink, null, cursorLinks);
+      content = extract(content, (v) => v instanceof RichText, "", rich);
       if (rich.length && !A.updateSpans) throw new Error("this Automerge has no updateSpans; can't import richtext()");
       handle.change((d) => {
         for (const k of Object.keys(d)) if (!skip(k) && !Object.hasOwn(content, k)) delete d[k];
         for (const k of Object.keys(content)) if (!skip(k)) d[k] = content[k];
-        for (const [path, spans] of rich) {
+        for (const [path, { spans }] of rich) {
           if (!skip(path[0])) A.updateSpans(d, path, spans, spanConfig);
         }
       });
+      return cursorLinks.filter(([path]) => !skip(path[0]));
+    }
+    function cursorUrl(A, target, link) {
+      const props = propPath(target, link.path);
+      let from, to;
+      try {
+        from = props && A.getCursor(target, props, link.cursor.from);
+        to = props && A.getCursor(target, props, link.cursor.to);
+      } catch {
+      }
+      if (!from || !to) {
+        console.warn("patchworkFolder: no text at", link.url, "for its cursors, so they're left off");
+        return link.url;
+      }
+      return `${link.url}/[${from === to ? from : `${from}-${to}`}]`;
+    }
+    function setAt(doc, path, value) {
+      let v = doc;
+      for (const k of path.slice(0, -1)) v = v[k];
+      v[path.at(-1)] = value;
     }
     const spanConfig = env.spanConfig;
     function eachLink(v, f) {
@@ -733,10 +878,28 @@ ${pad(depth)}}`;
         created.set(p, c);
         urls.set(p, c.handle.url);
       }
+      const linkUrl = (p, link, inRich) => {
+        const file = resolvePath(p, link.path);
+        const last = link.segments.at(-1);
+        const cursor = last instanceof Cursor ? last : void 0;
+        const path = cursor ? link.segments.slice(0, -1) : link.segments;
+        const url = [urls.get(file), ...path.map(serializeSegment)].join("/");
+        if (!cursor) return url;
+        if (inRich) {
+          console.warn(`patchworkFolder: ${p}: cursors in rich text aren't supported, so they're left off`, url);
+          return url;
+        }
+        return new CursorLink(file, url, path, cursor);
+      };
+      const toSet = [];
       for (const [p, v] of files) {
-        const content = materialize(v, A, (rel) => urls.get(resolvePath(p, rel)));
+        const content = materialize(v, A, (link, inRich) => linkUrl(p, link, inRich));
         const { handle, typed } = created.get(p);
-        fill(handle, content, typed, A);
+        for (const [path, link] of fill(handle, content, typed, A)) toSet.push([handle, path, link]);
+      }
+      for (const [handle, path, link] of toSet) {
+        const url = cursorUrl(A, created.get(link.file).handle.doc(), link);
+        handle.change((d) => setAt(d, path, url));
       }
       return { root: urls.get(rootPath), urls };
     }
@@ -773,7 +936,7 @@ ${pad(depth)}}`;
     async function exportDocText(url) {
       const { repo, Automerge: A } = ctx();
       const doc = await readDoc(repo, url);
-      return stringify(doc, { ...detectors(A), asRichText: (_s, path) => richSpans(A, doc, path) });
+      return stringify(withoutOwnPatchworkKeys(doc), { ...detectors(A), asRichText: (_s, path) => richSpans(A, doc, path) });
     }
     async function importDocText(text) {
       const { Automerge: A } = ctx();

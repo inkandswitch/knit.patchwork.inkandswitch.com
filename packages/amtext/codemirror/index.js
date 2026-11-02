@@ -52,6 +52,7 @@ const completions = [
   snippetCompletion('bytes64("${}")', { label: "bytes64", type: "function", detail: "Uint8Array, base64" }),
   snippetCompletion('date("${}")', { label: "date", type: "function", detail: "Date" }),
   snippetCompletion('link("./${}.amtext")', { label: "link", type: "function", detail: "doc in this folder" }),
+  snippetCompletion("cursor(${1}, ${2})", { label: "cursor", type: "function", detail: "text range (last in link)" }),
   snippetCompletion("richtext(\n\t${}\n)", { label: "richtext", type: "function", detail: "text with marks/blocks" }),
   snippetCompletion('text("${1}", { ${2} })', { label: "text", type: "function", detail: "marked run (in richtext)" }),
   snippetCompletion('block({ type string("${1}"), parents [], attrs {} })', { label: "block", type: "function", detail: "block marker (in richtext)" }),

@@ -4,7 +4,7 @@ import { execFileSync } from "node:child_process";
 import { writeFileSync, mkdtempSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { parse, stringify, Counter, ImmutableString, Link } from "./amtext.js";
+import { parse, stringify, Counter, Cursor, ImmutableString, Link } from "./amtext.js";
 import { patchworkFolder, zip, unzip, ROOT } from "./patchworkfolder.js";
 
 // ---- parser on the example from the request
@@ -91,7 +91,7 @@ const plugins = {
 // ---- build a source tree: folder -> [essay, subfolder -> [essay(again, cycle), unknown-type doc]], plus a dead link
 const src = fakeRepo();
 const mk = async (pw, body) => { const h = await src.create2(); h.change(d => { if (pw) d["@patchwork"] = pw; Object.assign(d, body); }); return h; };
-const essay = await mk({ type: "essay", suggestedImportUrl: "automerge:SHOULDNOTFOLLOW" }, {
+const essay = await mk({ type: "essay", suggestedImportUrl: "automerge:SHOULDNOTFOLLOW", mainDraftUrl: "automerge:3DRAFTDRAFTDRAFTDRAFTDRAFTDRA" }, {
   content: "# hi\nsee automerge:EMBEDDED in text",
   views: new A.Counter(7),
   slug: new A.ImmutableString("hi"),
@@ -112,7 +112,25 @@ essay.change(d => {
   d.notes = ["plain", "marked"];
   A.mark(d, ["notes", 1], { start: 0, end: 3, expand: "after" }, "em", true);
 });
-const odd = await mk({ type: "mystery" }, { x: 1 });
+const odd = await mk({ type: "mystery", mainDraftUrl: "automerge:3DRAFTDRAFTDRAFTDRAFTDRAFTDRA" }, { x: 1 });
+// comments: a range of the essay's text, the whole essay, and a range of the odd doc's text
+const contact = await mk(undefined, { name: "someone" });
+odd.change(d => { d.text = "odd text"; });
+const at = (h, path, n) => A.getCursor(h.doc(), path, n);
+const thread = (id, ref) => ({
+  "@patchwork": { type: "comment-thread" }, id, isResolved: false, refs: [ref],
+  comments: [{ id: `${id}-c`, contactUrl: contact.url, timestamp: 1, content: "ok" }],
+});
+essay.change(d => {
+  d["@comments"] = { threads: [
+    thread("t1", `${essay.url}/content/[${at(essay, ["content"], 2)}-${at(essay, ["content"], 4)}]#deadbeef`),
+    thread("t2", essay.url),
+    thread("t3", `${odd.url}/text/[${at(odd, ["text"], 8)}]`),
+  ] };
+  // a part of a doc that isn't text, found by matching a list item
+  d.lastThread = `${essay.url}/%5C%40comments/threads/${encodeURIComponent(JSON.stringify({ id: "t2" }))}/comments/@0`;
+  d.badCursor = `${essay.url}/content/[9@abcdef-10@abcdef]`;
+});
 const sub = await mk({ type: "folder" }, { title: "sub", docs: [] });
 const top = await mk({ type: "folder" }, { title: "My / Folder", docs: [] });
 sub.change(d => { d.docs.push({ name: "essay again", type: "essay", url: essay.url }, { name: "odd", type: "mystery", url: odd.url }, { name: "parent", type: "folder", url: top.url }); });
@@ -137,7 +155,15 @@ const entries = await unzip(bytes);
 const rootText = new TextDecoder().decode(entries.get(ROOT));
 console.log("---- root.amtext\n" + rootText);
 const essayName = [...entries].find(([, b]) => new TextDecoder().decode(b).includes("views"))[0];
-console.log(`---- ${essayName}\n` + new TextDecoder().decode(entries.get(essayName)));
+const essayText = new TextDecoder().decode(entries.get(essayName));
+console.log(`---- ${essayName}\n` + essayText);
+assert.ok(![...entries.values()].some(b => new TextDecoder().decode(b).includes("mainDraftUrl")), "mainDraftUrl left out");
+assert.ok(essayText.includes(`link("./${essayName}", "content", cursor(2, 4))`), "range ref is a link to positions");
+assert.ok(essayText.includes(`refs [ link("./${essayName}") ]`), "doc-level ref is a link");
+assert.match(essayText, /link\("\.\/[0-9a-f-]{36}\.amtext", "text", cursor\(8\)\)/, "ref to another doc's text");
+assert.ok(essayText.includes(`link("./${essayName}", "@comments", "threads", { id "t2" }, "comments", 0)`), "path with a match");
+assert.ok(essayText.includes(`contactUrl "${contact.url}"`), "contactUrl stays the contact's");
+assert.ok(essayText.includes(`badCursor "${essay.url}/content/[9@abcdef-10@abcdef]"`), "unresolvable cursors kept as they were");
 
 // ---- import into a fresh repo
 const dst = fakeRepo();
@@ -165,6 +191,24 @@ assert.equal(nSub.docs[2].url, root, "cycle back to root");
 const nOdd = get(nSub.docs[1].url);
 assert.deepEqual(nOdd["@patchwork"], { type: "mystery" }, "unknown type: @patchwork copied from file");
 assert.ok(warnings.some(w => w.includes('no datatype "mystery"')));
+// comments
+const nEssayDoc = get(nTop.docs[0].url);
+const [t1, t2, t3] = nEssayDoc["@comments"].threads;
+const range = /^(automerge:\w+)\/content\/\[([^\]-]+)-([^\]]+)\]$/.exec(t1.refs[0]);
+assert.ok(range, t1.refs[0]);
+assert.equal(range[1], nTop.docs[0].url, "range ref points at the new essay");
+assert.deepEqual(range.slice(2).map(c => A.getCursorPosition(nEssayDoc, ["content"], c)), [2, 4], "cursors are made again");
+assert.equal(t2.refs[0], nTop.docs[0].url, "doc-level ref is the new essay");
+assert.equal(t3.refs[0], `${nSub.docs[1].url}/text/[e]`, "ref into the other doc's text");
+assert.equal(t1.comments[0].contactUrl, contact.url, "contactUrl stays the contact's");
+assert.ok(!dst.handles.has(contact.url) && urls.size === 5, "contact not brought along");
+assert.equal(nEssayDoc.lastThread, `${nTop.docs[0].url}/%5C%40comments/threads/${encodeURIComponent(JSON.stringify({ id: "t2" }))}/comments/@0`);
+assert.equal(nEssayDoc.badCursor, `${essay.url}/content/[9@abcdef-10@abcdef]`);
+// hand-written: no text to put cursors in
+console.warn = (...a) => warnings.push(a.join(" "));
+const noText = await pf2.importFolder(await zip([{ name: ROOT, data: new TextEncoder().encode('{ n 1, r link("./root.amtext", "n", cursor(0)) }') }]));
+console.warn = origWarn;
+assert.equal(get(noText.root).r, `${noText.root}/n`, "cursors left off when there's no text");
 // rich text
 const norm = (spans, from, to) => JSON.parse(JSON.stringify(spans).replaceAll(from, to));
 const nEssayUrl = nTop.docs[0].url;
