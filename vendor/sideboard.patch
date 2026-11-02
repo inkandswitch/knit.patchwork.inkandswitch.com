@@ -138,7 +138,7 @@ index 43caf09..91c4b50 100644
        </Menu>
      </>
 diff --git a/src/sideboard/create-new.tsx b/src/sideboard/create-new.tsx
-index b119c0a..ca127a6 100644
+index 6da12a4..4030f28 100644
 --- a/src/sideboard/create-new.tsx
 +++ b/src/sideboard/create-new.tsx
 @@ -6,16 +6,21 @@ import {
@@ -152,7 +152,7 @@ index b119c0a..ca127a6 100644
    isLoadablePlugin,
    isLoadedPlugin,
  } from "@inkandswitch/patchwork-plugins";
- import { createSignal, lazy, Show } from "solid-js";
+ import { createSignal, lazy, onMount, Show } from "solid-js";
  import { NewDocIcon } from "./icons.tsx";
 -import type { DocLink, FolderDoc } from "@inkandswitch/patchwork-filesystem";
 +import type {
@@ -196,7 +196,7 @@ index b119c0a..ca127a6 100644
    const doc = docHandle.doc();
    const name = datatype.module.getTitle(doc);
  
-@@ -91,6 +111,16 @@ export default function CreateNew(props: CreateNewProps) {
+@@ -100,6 +120,16 @@ export default function CreateNew(props: CreateNewProps) {
      setOpen(false);
    }
  
@@ -213,7 +213,7 @@ index b119c0a..ca127a6 100644
    // Kobalte's menu trigger opens on pointerdown, which swallows the start of a
    // native drag. So the visible button is a plain draggable <button> that we
    // open the menu from on click; a 0-size aria-hidden trigger overlapping it
-@@ -164,6 +194,7 @@ export default function CreateNew(props: CreateNewProps) {
+@@ -175,6 +205,7 @@ export default function CreateNew(props: CreateNewProps) {
            }}
            onPickDatatype={selectDatatype}
            onSubmitUrl={handleUrlSubmit}
@@ -222,65 +222,27 @@ index b119c0a..ca127a6 100644
        </Show>
      </div>
 diff --git a/src/sideboard/dnd/drop.test.ts b/src/sideboard/dnd/drop.test.ts
-index f2588c9..0d4037b 100644
+index eee9b5d..0d4037b 100644
 --- a/src/sideboard/dnd/drop.test.ts
 +++ b/src/sideboard/dnd/drop.test.ts
-@@ -1,11 +1,15 @@
+@@ -1,4 +1,4 @@
 -import { describe, expect, it } from "vitest";
 +import { beforeAll, describe, expect, it } from "vitest";
  import * as A from "@automerge/automerge";
  import type {
    AutomergeUrl,
-   DocHandle,
-   Repo,
- } from "@automerge/automerge-repo/slim";
--import type { FolderDoc } from "@inkandswitch/patchwork-filesystem";
-+import type {
-+  FolderDoc,
-+  UnixFileEntry,
-+} from "@inkandswitch/patchwork-filesystem";
+@@ -9,6 +9,7 @@ import type {
+   FolderDoc,
+   UnixFileEntry,
+ } from "@inkandswitch/patchwork-filesystem";
 +import { getRegistry, registerPlugins } from "@inkandswitch/patchwork-plugins";
  import { endSpot, rowSpot } from "./dnd.ts";
  import { DropError, executeDrop } from "./operations.ts";
  import { handleFilesDrop } from "../document-list/file-drop.ts";
-@@ -126,6 +130,87 @@ describe("handleFilesDrop", () => {
-     expect(failed).toEqual(["broken"]);
-     expect(landed.map((l) => l.index)).toEqual([1, 2]);
+@@ -163,6 +164,53 @@ describe("handleFilesDrop", () => {
+       "application/octet-stream",
+     ]);
    });
-+
-+  it("keeps text as a string, even when the browser calls it octet-stream", async () => {
-+    const f = folder();
-+    const octet = { type: "application/octet-stream" };
-+    await handleFilesDrop(
-+      [
-+        new File(["a"], "a.amtext", octet),
-+        new File(["k"], "k.knitout", octet),
-+        new File(["j"], "j.js", { type: "text/javascript" }),
-+        new File(["n"], "n.json", { type: "application/json" }),
-+        new File([new Uint8Array([0, 1])], "b.bin", octet),
-+      ],
-+      f,
-+      repo,
-+      0
-+    );
-+    const files = await Promise.all(
-+      f.doc()!.docs.map(async (d) => (await repo.find<UnixFileEntry>(d.url)).doc()!)
-+    );
-+    expect(files.map((file) => file.content)).toEqual([
-+      "a",
-+      "k",
-+      "j",
-+      "n",
-+      new Uint8Array([0, 1]),
-+    ]);
-+    expect(files.map((file) => file.mimeType)).toEqual([
-+      "text/plain",
-+      "text/plain",
-+      "text/javascript",
-+      "application/json",
-+      "application/octet-stream",
-+    ]);
-+  });
 +
 +  describe("with an archive format", () => {
 +    beforeAll(async () => {
@@ -396,10 +358,10 @@ index 7dd9b4e..f3a1671 100644
      <>
        <For each={docs()}>
 diff --git a/src/sideboard/document-list/file-drop.ts b/src/sideboard/document-list/file-drop.ts
-index 796f47d..5807fa5 100644
+index c961a2d..5807fa5 100644
 --- a/src/sideboard/document-list/file-drop.ts
 +++ b/src/sideboard/document-list/file-drop.ts
-@@ -1,64 +1,190 @@
+@@ -1,11 +1,14 @@
  import type { Repo, DocHandle } from "@automerge/automerge-repo/slim";
  import type {
 +  DocLink,
@@ -411,62 +373,15 @@ index 796f47d..5807fa5 100644
  import { log } from "../dnd/debug.ts";
 +import { docLinkFromUrl } from "../lib/doc-link.ts";
 +import { archiveFor, loadArchive } from "../knit-archives.ts";
-+
-+// text the browser doesn't know is text: .amtext and .knitout come in as
-+// application/octet-stream (or nothing at all)
-+const TEXT_EXTENSIONS = new Set([
-+  "amtext",
-+  "knitout",
-+  "k",
-+  "js",
-+  "mjs",
-+  "cjs",
-+  "jsx",
-+  "ts",
-+  "mts",
-+  "cts",
-+  "tsx",
-+  "json",
-+  "jsonc",
-+  "md",
-+  "markdown",
-+  "txt",
-+  "csv",
-+  "tsv",
-+  "html",
-+  "htm",
-+  "css",
-+  "svg",
-+  "xml",
-+  "yaml",
-+  "yml",
-+  "toml",
-+  "ini",
-+  "sh",
-+  "py",
-+  "log",
-+]);
-+
-+const TEXT_MIME_TYPES = new Set([
-+  "application/json",
-+  "application/javascript",
-+  "application/ecmascript",
-+  "application/xml",
-+  "application/x-sh",
-+]);
-+
-+const isTextMimeType = (mimeType: string) => {
-+  const type = mimeType.split(";")[0].trim();
-+  return (
-+    type.startsWith("text/") ||
-+    TEXT_MIME_TYPES.has(type) ||
-+    type.endsWith("+json") ||
-+    type.endsWith("+xml")
-+  );
-+};
+ 
+ // text the browser doesn't know is text: .amtext and .knitout come in as
+ // application/octet-stream (or nothing at all)
+@@ -61,68 +64,127 @@ const isTextMimeType = (mimeType: string) => {
+ };
  
  /**
 - * Turn files dropped from the operating system into UnixFileEntry documents
+- * (with string content if the file is text)
 - * and insert them into `folderHandle` at `index`, in the order they were
 - * dropped. A file that can't be read is skipped and named in `failed`; the
 - * rest still go in.
@@ -493,14 +408,24 @@ index 796f47d..5807fa5 100644
  
 -  for (const file of files) {
 -    try {
--      const content = new Uint8Array(await file.arrayBuffer());
+-      const nameParts = file.name.split(".");
+-      const extension = nameParts.length > 1 ? nameParts.pop()! : "";
+-      const nameWithoutExt = nameParts.join(".");
 +  const nameParts = file.name.split(".");
 +  const extension = nameParts.length > 1 ? nameParts.pop()! : "";
 +  const nameWithoutExt = nameParts.join(".");
  
--      const nameParts = file.name.split(".");
--      const extension = nameParts.length > 1 ? nameParts.pop()! : "";
--      const nameWithoutExt = nameParts.join(".");
+-      const isText =
+-        isTextMimeType(file.type) ||
+-        TEXT_EXTENSIONS.has(extension.toLowerCase());
+-      const content = isText
+-        ? await file.text()
+-        : new Uint8Array(await file.arrayBuffer());
+-      const fallbackMimeType = isText
+-        ? "text/plain"
+-        : "application/octet-stream";
+-      const knownMimeType =
+-        file.type !== "application/octet-stream" && file.type;
 +  const isText =
 +    isTextMimeType(file.type) || TEXT_EXTENSIONS.has(extension.toLowerCase());
 +  const content = isText
@@ -516,7 +441,7 @@ index 796f47d..5807fa5 100644
 -        },
 -        content,
 -        extension,
--        mimeType: file.type || "application/octet-stream",
+-        mimeType: knownMimeType || fallbackMimeType,
 -        name: nameWithoutExt,
 -      });
 +  const handle = await repo.create2<UnixFileEntry & HasPatchworkMetadata>({
