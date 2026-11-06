@@ -698,37 +698,40 @@ index 0000000..61c71b4
 +}
 diff --git a/src/sideboard/knit-datatypes.ts b/src/sideboard/knit-datatypes.ts
 new file mode 100644
-index 0000000..962f0a6
+index 0000000..eb0ec79
 --- /dev/null
 +++ b/src/sideboard/knit-datatypes.ts
-@@ -0,0 +1,29 @@
+@@ -0,0 +1,32 @@
 +import type {
 +  DatatypeDescription,
 +  Plugin,
 +} from "@inkandswitch/patchwork-plugins";
 +import { useFilteredDatatypes } from "./lib/solid-plugins";
 +
-+// knit: knitoutjs projects come first, and files are made from inside them.
-+// the create-new dropdown and the right-click Create menu both list from here
-+const PINNED = "knitoutjs-panes";
-+const HIDDEN = new Set(["new-file"]);
-+const RENAMED: Record<string, string> = { [PINNED]: "KnitoutJS Project" };
++// knit: knitoutjs projects come first, and "New File" (which asks for a name
++// before it makes anything) comes last. the create-new dropdown and the
++// right-click Create menu both list from here
++const FIRST = "knitoutjs-panes";
++const LAST = "new-file";
++const RENAMED: Record<string, string> = {
++  [FIRST]: "KnitoutJS Project",
++  [LAST]: "New File...",
++};
 +
 +// a broken plugin may register without a name; show its id rather than
 +// letting it take the whole menu down
 +export const label = (d: Plugin<DatatypeDescription>) =>
 +  RENAMED[d.id] ?? (typeof d.name === "string" ? d.name : String(d.id));
 +
++const rank = (d: Plugin<DatatypeDescription>) =>
++  d.id === FIRST ? -1 : d.id === LAST ? 1 : 0;
++
 +/** The datatypes you can make, in the order the menus show them. */
 +export function useCreatableDatatypes() {
-+  const datatypes = useFilteredDatatypes(
-+    (item) => !item.unlisted && !HIDDEN.has(item.id)
-+  );
++  const datatypes = useFilteredDatatypes((item) => !item.unlisted);
 +  return () =>
 +    [...datatypes].sort(
-+      (a, b) =>
-+        Number(b.id === PINNED) - Number(a.id === PINNED) ||
-+        label(a).localeCompare(label(b))
++      (a, b) => rank(a) - rank(b) || label(a).localeCompare(label(b))
 +    );
 +}
 diff --git a/src/sideboard/menus.test.tsx b/src/sideboard/menus.test.tsx
