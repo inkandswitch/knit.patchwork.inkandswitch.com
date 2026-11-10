@@ -1,0 +1,93 @@
+diff --git a/src/install-modal.tsx b/src/install-modal.tsx
+index f1fd8e6..383cd01 100644
+--- a/src/install-modal.tsx
++++ b/src/install-modal.tsx
+@@ -14,6 +14,7 @@ import {
+ import {
+   bareModuleUrl,
+   isAutomergeUrl,
++  isHttpUrl,
+   isInstallableUrl,
+   moduleKey,
+ } from "./origin.ts";
+@@ -102,7 +103,10 @@ export function InstallModal(props: {
+   const [error, setError] = createSignal<string | null>(null);
+ 
+   const target = createMemo(() => url().trim());
+-  const valid = createMemo(() => isInstallableUrl(target()));
++  // knit: only http(s) packages can be installed, not automerge: ones
++  const valid = createMemo(
++    () => isHttpUrl(target()) && isInstallableUrl(target())
++  );
+   const alreadyInstalled = createMemo(() => {
+     const key = moduleKey(target());
+     return !!key && props.installedKeys.has(key);
+@@ -125,8 +129,12 @@ export function InstallModal(props: {
+     const raw = target();
+     resetPreview();
+     if (!raw) return;
++    if (isAutomergeUrl(raw)) {
++      setError("Only http:// and https:// packages can be installed here.");
++      return;
++    }
+     if (!valid()) {
+-      setError("That doesn't look like an automerge: or https:// URL.");
++      setError("That doesn't look like an http:// or https:// URL.");
+       return;
+     }
+     const token = ++previewToken;
+@@ -169,8 +177,7 @@ export function InstallModal(props: {
+           </button>
+         </header>
+         <p class="pw-install__blurb">
+-          Paste an <code>automerge:</code> or <code>https://</code> URL to add
+-          it to your package list.
++          Paste an <code>https://</code> URL to add it to your package list.
+         </p>
+         <input
+           ref={(el) => setTimeout(() => el.focus(), 0)}
+@@ -178,7 +185,7 @@ export function InstallModal(props: {
+           type="text"
+           spellcheck={false}
+           autocomplete="off"
+-          placeholder="automerge:… or https://…"
++          placeholder="https://…"
+           value={url()}
+           onInput={(e) => setUrl(e.currentTarget.value)}
+           onKeyDown={(e) => {
+diff --git a/src/packages.test.tsx b/src/packages.test.tsx
+index 337e048..d1c36e1 100644
+--- a/src/packages.test.tsx
++++ b/src/packages.test.tsx
+@@ -77,3 +77,31 @@ describe("the filter box", () => {
+     expect(element.querySelector(".pw-modal")).toBeNull();
+   });
+ });
++
++// knit only installs http(s) packages
++describe("the install modal", () => {
++  function paste(search: HTMLInputElement, text: string) {
++    const event = new Event("paste", { bubbles: true, cancelable: true });
++    Object.defineProperty(event, "clipboardData", {
++      value: { getData: () => text },
++    });
++    search.dispatchEvent(event);
++  }
++
++  it("won't install an automerge url", () => {
++    const { element, search } = mount();
++    paste(search, "automerge:3psiCwUeZNMFrmtiAkX75Jvy1tED");
++    const add = element.querySelector<HTMLButtonElement>(".pw-install__add");
++    expect(add?.disabled).toBe(true);
++    expect(element.querySelector(".pw-install__error")?.textContent).toMatch(
++      /Only http/
++    );
++  });
++
++  it("will install an https url", () => {
++    const { element, search } = mount();
++    paste(search, "https://example.com/tool/");
++    const add = element.querySelector<HTMLButtonElement>(".pw-install__add");
++    expect(add?.disabled).toBe(false);
++  });
++});

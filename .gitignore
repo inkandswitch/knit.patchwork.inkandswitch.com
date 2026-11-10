@@ -4,7 +4,7 @@
 # built from patchwork-pkg-base + vendor/*.patch by scripts/vendor.mjs (pnpm build)
 /.vendor/
 /public/packages/sideboard/dist/
-/public/packages/threepane/dist/
+/public/packages/packages/dist/
 .pushwork/
 node_modules/
 playright-report/

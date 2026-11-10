@@ -21,7 +21,7 @@ const packages = {
 	// main: "load on idle" (pkg-base 0.0.107)
 	sideboard: "91f44464a78174daba13ed9803f7bdafef3d22bc",
 	// main: "load on idle" (pkg-base 0.0.107)
-	threepane: "91f44464a78174daba13ed9803f7bdafef3d22bc",
+	packages: "91f44464a78174daba13ed9803f7bdafef3d22bc",
 }
 
 // a commit needs someone to have made it, and a build machine has no one
@@ -62,6 +62,8 @@ async function fetchSource(name, commit, dir) {
 		rmSync(tarball)
 	}
 	run("git", ["init", "--quiet"], dir)
+	// not every package has its own .gitignore (base's is at its root)
+	writeFileSync(join(dir, ".git", "info", "exclude"), "/dist/\n/node_modules/\n")
 	run("git", ["add", "--all"], dir)
 	run("git", [...git, "commit", "--quiet", "--no-verify", "-m", `${repo}@${commit}`], dir)
 	run("pnpm", ["install", "--frozen-lockfile"], dir)
