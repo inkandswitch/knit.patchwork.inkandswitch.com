@@ -27,7 +27,6 @@
 		"./packages/amtext/",
 		"./packages/raw/",
 		"https://lattice.patchwork.inkandswitch.com/packages/knitoutjs/",
-		"https://lattice.patchwork.inkandswitch.com/packages/lattice/",
 		"./packages/patternwitch/"
 	]
 }
