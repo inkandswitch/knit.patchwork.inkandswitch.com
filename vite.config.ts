@@ -32,8 +32,8 @@ export default defineConfig({
 				},
 			},
 			icons: {
-				source: process.env.PATCHWORK_FAVICON ?? "public/patchwork.svg",
-				maskIcon: "public/mask.svg",
+				source: process.env.PATCHWORK_FAVICON ?? "public/knit.svg",
+				maskIcon: "public/knit-mask.svg",
 			},
 			static: [
 				base
