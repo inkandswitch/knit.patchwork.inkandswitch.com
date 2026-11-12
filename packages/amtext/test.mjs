@@ -139,10 +139,12 @@ top.change(d => { d.docs.push({ name: "essay", type: "essay", url: essay.url + "
 const pf1 = patchworkFolder({ repo: src, Automerge: A, plugins });
 const origWarn = console.warn; const warnings = []; console.warn = (...a) => warnings.push(a.join(" "));
 const { bytes, filename, count, failed } = await pf1.exportFolder(top.url);
+const { filename: renamed } = await patchworkFolder({ repo: src, Automerge: A, plugins, extension: ".latticeproject" }).exportFolder(top.url);
 console.warn = origWarn;
 assert.equal(count, 5);
 assert.deepEqual(failed, ["automerge:4NMNnkMhL8jXrdJ9jamS58PAVdXu"]);
 assert.equal(filename, "My - Folder.patchworkfolder");
+assert.equal(renamed, "My - Folder.latticeproject");
 
 // archive is a real zip
 const dir = mkdtempSync(join(tmpdir(), "pf-"));

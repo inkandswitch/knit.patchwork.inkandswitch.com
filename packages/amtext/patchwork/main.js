@@ -6,6 +6,13 @@
  * - a "patchwork:archive" plugin packs a doc and every doc it links to into a
  *   .patchworkfolder, and unpacks one into fresh docs. The sideboard uses it
  *   to download folders and to take .patchworkfolder files dropped on it.
+ * - another unpacks a .latticeproject (lattice's download of a project, the
+ *   same zip) into a lattice project, as lattice does. It's only for taking
+ *   them: a folder isn't a lattice project, so there's no downloading one as
+ *   one. Opening what it makes needs lattice installed.
+ * - and another makes a doc of an .amtext from a link to one pasted in the
+ *   sideboard. Only from a link: an .amtext from the computer is added as the
+ *   text file it is, to be edited.
  */
 
 import { Compartment } from "@codemirror/state";
@@ -54,6 +61,29 @@ export const plugins = [
     async load() {
       const { archive } = await import("./archive.js");
       return archive;
+    },
+  },
+  {
+    type: "patchwork:archive",
+    id: "latticeproject",
+    name: "Lattice project",
+    extension: ".latticeproject",
+    importOnly: true,
+    async load() {
+      const { latticeProject } = await import("./archive.js");
+      return latticeProject;
+    },
+  },
+  {
+    type: "patchwork:archive",
+    id: "amtext",
+    name: "Automerge text",
+    extension: ".amtext",
+    importOnly: true,
+    linkOnly: true,
+    async load() {
+      const { amtextDoc } = await import("./archive.js");
+      return amtextDoc;
     },
   },
 ];
