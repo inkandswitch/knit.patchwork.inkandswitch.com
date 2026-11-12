@@ -115,7 +115,7 @@
 	--syntax-emphasis: var(--knit-text);
 	--syntax-style-emphasis: italic;
 
-	--syntax-heading: var(--knit-text);
+	--syntax-heading: var(--text-editor-line);
 	--syntax-weight-heading: bold;
 
 	--syntax-link: var(--knit-accent);

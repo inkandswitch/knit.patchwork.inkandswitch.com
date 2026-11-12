@@ -183,7 +183,7 @@
 	--syntax-emphasis: var(--ink);
 	--syntax-style-emphasis: italic;
 
-	--syntax-heading: var(--ink);
+	--syntax-heading: var(--text-editor-line);
 	--syntax-weight-heading: bold;
 
 	--syntax-link: var(--studio-link);
