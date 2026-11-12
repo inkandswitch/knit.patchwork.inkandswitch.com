@@ -126,7 +126,7 @@
 	--syntax-style-comment: italic;
 	--syntax-doc-comment: var(--syntax-comment);
 	--syntax-style-doc-comment: italic;
-	--syntax-quote: var(--syntax-comment);
+	--syntax-quote: var(--text-editor-line);
 
 	--syntax-meta: var(--studio-link);
 	--syntax-invalid: var(--studio-danger);
@@ -134,7 +134,7 @@
 	--syntax-operator: var(--ink-mute);
 	--syntax-punctuation: var(--ink-mute);
 	--syntax-angle-bracket: var(--ink-mute);
-	--syntax-list: var(--ink-mute);
+	--syntax-list: var(--text-editor-line);
 
 	--syntax-keyword: oklch(
 		var(--l-ink-soft) calc(var(--accent-chroma) * 0.9) calc(var(--hue) - 60)

@@ -1,0 +1,205 @@
+/* Amber — an amber-phosphor vt100 (from three). one hue at three
+   brightnesses on warm black, everything monospaced, a little bloom on the
+   glyphs and scanlines over the glass. */
+
+/* IBM Plex Mono is bundled alongside these themes and self-hosted */
+@font-face {
+	font-family: "IBM Plex Mono";
+	font-weight: 400;
+	font-style: normal;
+	font-display: swap;
+	src: local("IBM Plex Mono"), url("./fonts/ibmplexmono-regular.woff2") format("woff2");
+}
+@font-face {
+	font-family: "IBM Plex Mono";
+	font-weight: 700;
+	font-style: normal;
+	font-display: swap;
+	src: local("IBM Plex Mono Bold"), url("./fonts/ibmplexmono-bold.woff2") format("woff2");
+}
+
+[theme="amber"] {
+	--studio-fill: var(--amber-paper);
+	--studio-line: var(--amber-ink);
+	--studio-chrome-fill: var(--amber-chrome);
+	--studio-chrome-line: var(--amber-ink);
+	--studio-offset-tint: var(--amber-ink);
+	--studio-offset-tint-amount: 0%;
+
+	--studio-primary: var(--amber-accent);
+	--studio-secondary: var(--amber-ink-soft);
+	--studio-link: var(--amber-accent);
+	--studio-danger: var(--amber-bad);
+	--studio-warning: var(--amber-warn);
+	--studio-success: var(--amber-good);
+	--studio-info: var(--amber-ink-soft);
+	--studio-added: var(--amber-good);
+	--studio-deleted: var(--amber-bad);
+	--studio-modified: var(--amber-warn);
+	--studio-selection-fill: var(--amber-ink);
+	--studio-selection-line: var(--amber-paper);
+	--studio-focus-ring: var(--amber-ink);
+	--studio-scrollbar-color: var(--amber-ink-faint) var(--amber-chrome);
+
+	--studio-family: var(--amber-family-text);
+	--studio-family-sans: var(--amber-family-ui);
+	--studio-family-ui: var(--amber-family-ui);
+	--studio-family-code: var(--amber-family-code);
+	--studio-chrome-family: var(--amber-family-ui);
+
+	--studio-radius-scale: 0;
+	--studio-border-width: 1px;
+	--studio-border-style: solid;
+
+	--editor-cursor-fill: var(--amber-ink);
+
+	--text-editor-fill: var(--amber-paper);
+	--text-editor-line: var(--amber-ink);
+	--text-editor-cursor-fill: var(--amber-ink);
+	--text-editor-selection-fill: var(--amber-select);
+	--text-editor-selection-line: var(--amber-ink);
+	--text-editor-active-line-fill: var(--amber-active-line);
+	--text-editor-active-line-line: var(--amber-ink);
+	--text-editor-active-line-fill--gutter: var(--amber-active-line);
+	--text-editor-active-line-line--gutter: var(--amber-ink);
+	--text-editor-gutter-fill: var(--amber-paper);
+	--text-editor-gutter-line: var(--amber-ink-faint);
+	--text-editor-gutter-border: var(--amber-rule);
+	--text-editor-tooltip-fill: var(--amber-chrome);
+	--text-editor-tooltip-color: var(--amber-ink);
+
+	--syntax-comment: var(--amber-ink-faint);
+	--syntax-style-comment: italic;
+	--syntax-line-comment: var(--amber-ink-faint);
+	--syntax-style-line-comment: italic;
+	--syntax-block-comment: var(--amber-ink-faint);
+	--syntax-style-block-comment: italic;
+	--syntax-doc-comment: var(--amber-ink-faint);
+	--syntax-style-doc-comment: italic;
+	--syntax-quote: var(--text-editor-line);
+
+	--syntax-meta: var(--amber-ink-soft);
+	--syntax-invalid: var(--amber-bad);
+
+	--syntax-operator: var(--amber-ink);
+	--syntax-punctuation: var(--amber-ink-soft);
+	--syntax-angle-bracket: var(--amber-ink-soft);
+	--syntax-list: var(--text-editor-line);
+
+	--syntax-keyword: var(--amber-bright);
+	--syntax-control-keyword: var(--amber-bright);
+	--syntax-module-keyword: var(--amber-bright);
+
+	--syntax-bool: var(--amber-bright);
+	--syntax-weight-bool: bold;
+	--syntax-atom: var(--amber-bright);
+	--syntax-weight-atom: bold;
+	--syntax-number: var(--amber-ink);
+	--syntax-integer: var(--amber-ink);
+	--syntax-float: var(--amber-ink);
+	--syntax-regexp: var(--amber-ink-soft);
+	--syntax-namespace: var(--amber-ink);
+
+	--syntax-type-name: var(--amber-bright);
+	--syntax-weight-type-name: bold;
+	--syntax-class-name: var(--amber-bright);
+	--syntax-weight-class-name: bold;
+	--syntax-type-operator: var(--amber-ink-soft);
+
+	--syntax-function--variable-name: var(--amber-ink);
+	--syntax-function--property-name: var(--amber-ink);
+
+	--syntax-variable-name: var(--amber-ink);
+	--syntax-definition--variable-name: var(--amber-bright);
+
+	--syntax-string: var(--amber-ink-soft);
+	--syntax-fill-string: transparent;
+	--syntax-special--string: var(--amber-ink-soft);
+	--syntax-escape: var(--amber-bright);
+
+	--syntax-tag-name: var(--amber-bright);
+	--syntax-attribute-name: var(--amber-ink-soft);
+	--syntax-style-attribute-name: italic;
+
+	--syntax-strong: var(--amber-bright);
+	--syntax-weight-strong: bold;
+	--syntax-emphasis: var(--amber-ink);
+	--syntax-style-emphasis: italic;
+
+	--syntax-heading: var(--text-editor-line);
+	--syntax-weight-heading: bold;
+
+	--syntax-link: var(--amber-accent);
+	--syntax-style-link: underline;
+
+	--syntax-inserted: var(--amber-good);
+	--syntax-deleted: var(--amber-bad);
+	--syntax-changed: var(--amber-warn);
+	--syntax-content-separator: var(--amber-rule);
+}
+
+[theme="amber"] {
+	color-scheme: dark;
+
+	/* p3 phosphor (~602nm) at full, normal and dim drive */
+	--amber-paper: #0d0800;
+	--amber-chrome: #090500;
+	--amber-bright: #ffd27a;
+	--amber-ink: #ffb000;
+	--amber-ink-soft: #cc8a00;
+	--amber-ink-faint: #7f5600;
+	--amber-rule: #4a3100;
+	--amber-select: #4d3300;
+	--amber-active-line: #1a1100;
+	--amber-accent: #ffb000;
+	/* the diffs stay on the tube: a hotter yellow and a redder orange */
+	--amber-good: #ffe27f;
+	--amber-bad: #ff6a2b;
+	--amber-warn: #ffcf33;
+
+	--amber-family-code: "IBM Plex Mono", "SF Mono", ui-monospace, Menlo,
+		Consolas, "DejaVu Sans Mono", "Liberation Mono", monospace;
+	--amber-family-text: var(--amber-family-code);
+	--amber-family-ui: var(--amber-family-code);
+	--studio-font-size: 14px;
+	--studio-line-height: 1.5;
+	--studio-chrome-letter-spacing: 0.02em;
+
+	/* nothing casts a shadow on glass; things glow instead */
+	--studio-shadow-color: #ffb000;
+	--studio-shadow-strength: 0;
+	--studio-shadow-sm: 0 0 0 1px var(--amber-rule);
+	--studio-shadow: 0 0 0 1px var(--amber-rule), 0 0 12px #ffb0001a;
+	--studio-shadow-md: 0 0 0 1px var(--amber-rule), 0 0 18px #ffb00024;
+	--studio-shadow-lg: 0 0 0 1px var(--amber-rule), 0 0 28px #ffb0002e;
+	--studio-backdrop-blur: 0;
+
+	caret-color: var(--amber-ink);
+	/* bloom: the phosphor spills a little past each glyph */
+	text-shadow: 0 0 3px #ffb00066;
+}
+
+html[theme="amber"] {
+	background-color: var(--amber-paper);
+}
+
+/* scanlines across the glass, over everything and in the way of nothing */
+html[theme="amber"] body::after {
+	content: "";
+	position: fixed;
+	inset: 0;
+	z-index: 2147483647;
+	pointer-events: none;
+	background: repeating-linear-gradient(
+		to bottom,
+		transparent 0 2px,
+		#00000038 2px 3px
+	);
+}
+
+/* selection is reverse video, as it was on the tube */
+[theme="amber"] ::selection {
+	background: var(--amber-ink);
+	color: var(--amber-paper);
+	text-shadow: none;
+}

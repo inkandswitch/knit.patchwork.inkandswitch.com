@@ -65,7 +65,7 @@
 	--syntax-style-block-comment: italic;
 	--syntax-doc-comment: var(--knit-comment);
 	--syntax-style-doc-comment: italic;
-	--syntax-quote: var(--knit-comment);
+	--syntax-quote: var(--text-editor-line);
 
 	--syntax-meta: var(--knit-blue);
 	--syntax-invalid: var(--knit-red);
@@ -73,7 +73,7 @@
 	--syntax-operator: var(--knit-cyan);
 	--syntax-punctuation: var(--knit-text-soft);
 	--syntax-angle-bracket: var(--knit-text-soft);
-	--syntax-list: var(--knit-text-soft);
+	--syntax-list: var(--text-editor-line);
 
 	--syntax-keyword: var(--knit-purple);
 	--syntax-control-keyword: var(--knit-purple);

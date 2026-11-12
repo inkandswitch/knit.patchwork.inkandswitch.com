@@ -1,8 +1,8 @@
-/* Tokyo Night — inspired by the lights of downtown Tokyo */
-[theme="tokyo-night"] {
+/* Tokyo Night Storm — the blue-on-blue storm variant of Tokyo Night */
+[theme="tokyo-night-storm"] {
 	color-scheme: dark;
-	--studio-fill: #1a1b26;
-	--studio-line: #a9b1d6;
+	--studio-fill: #24283b;
+	--studio-line: #c0caf5;
 	--studio-primary: #7aa2f7;
 	--studio-secondary: #7dcfff;
 	--studio-danger: #f7768e;
@@ -11,13 +11,13 @@
 	--studio-deleted: #f7768e;
 	--studio-modified: #7aa2f7;
 	--studio-link: #7aa2f7;
-	--studio-selection-fill: #283457;
+	--studio-selection-fill: #2e3c64;
 
 	--text-editor-cursor-fill: #c0caf5;
 
-	--text-editor-gutter-fill: var(--text-editor-fill);
+	--text-editor-gutter-fill: #1f2335;
 	--text-editor-gutter-line: #3b4261;
-	--text-editor-gutter-border: none;
+	--text-editor-gutter-border: #1f2335;
 
 	--syntax-comment: #565f89;
 	--syntax-style-comment: italic;
@@ -84,8 +84,8 @@
 	--syntax-link: #7aa2f7;
 	--syntax-style-link: underline;
 
-	--syntax-quote: #565f89;
-	--syntax-list: #a9b1d6;
+	--syntax-quote: var(--text-editor-line);
+	--syntax-list: var(--text-editor-line);
 
 	--syntax-inserted: #9ece6a;
 	--syntax-deleted: #f7768e;

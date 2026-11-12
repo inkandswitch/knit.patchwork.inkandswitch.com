@@ -4,14 +4,10 @@ const themes = [
 	{id: "dracula", name: "Dracula", colorScheme: "dark"},
 	{id: "nord", name: "Nord", colorScheme: "dark"},
 	{id: "gruvbox-dark", name: "Gruvbox Dark", colorScheme: "dark"},
-	{id: "gruvbox-light", name: "Gruvbox Light", colorScheme: "light"},
 	{id: "rose-pine", name: "Rose Pine", colorScheme: "dark"},
 	{id: "rose-pine-dawn", name: "Rose Pine Dawn", colorScheme: "light"},
-	{id: "tokyo-night", name: "Tokyo Night", colorScheme: "dark"},
-	{id: "kanagawa", name: "Kanagawa", colorScheme: "dark"},
-	{id: "kanagawa-lotus", name: "Kanagawa Lotus", colorScheme: "light"},
+	{id: "tokyo-night-storm", name: "Tokyo Night Storm", colorScheme: "dark"},
 	{id: "everforest-dark", name: "Everforest Dark", colorScheme: "dark"},
-	{id: "everforest-light", name: "Everforest Light", colorScheme: "light"},
 	{id: "flexoki-dark", name: "Flexoki Dark", colorScheme: "dark"},
 	{id: "flexoki-light", name: "Flexoki Light", colorScheme: "light"},
 	{id: "solarized-dark", name: "Solarized Dark", colorScheme: "dark"},
@@ -21,9 +17,9 @@ const themes = [
 	{id: "paper", name: "Paper", colorScheme: "light"},
 	{id: "synthwave84", name: "Synthwave '84", colorScheme: "dark"},
 	{id: "plan9", name: "Plan 9", colorScheme: "light"},
-	{id: "pushpin", name: "Pushpin", colorScheme: "light"},
 	{id: "twentyfour", name: "Twentyfour", colorScheme: "light"},
 	{id: "sundae", name: "Sundae", colorScheme: "light"},
+	{id: "amber", name: "Amber", colorScheme: "dark"},
 ]
 
 export const plugins = themes.map(theme => ({
