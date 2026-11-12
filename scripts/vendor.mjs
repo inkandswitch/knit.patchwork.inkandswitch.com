@@ -18,10 +18,10 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "..")
 const repo = "inkandswitch/patchwork-pkg-base"
 
 const packages = {
-	// main: "load on idle" (pkg-base 0.0.107)
-	sideboard: "91f44464a78174daba13ed9803f7bdafef3d22bc",
-	// main: "load on idle" (pkg-base 0.0.107)
-	packages: "91f44464a78174daba13ed9803f7bdafef3d22bc",
+	// main: pkg-base 0.0.136
+	sideboard: "f1c35897f3ff265670e57517f3b41cd2d362b5d2",
+	// main: pkg-base 0.0.136
+	packages: "f1c35897f3ff265670e57517f3b41cd2d362b5d2",
 }
 
 // a commit needs someone to have made it, and a build machine has no one
