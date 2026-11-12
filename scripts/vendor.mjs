@@ -19,9 +19,9 @@ const repo = "inkandswitch/patchwork-pkg-base"
 
 const packages = {
 	// main: pkg-base 0.0.136
-	sideboard: "f1c35897f3ff265670e57517f3b41cd2d362b5d2",
+	sideboard: "df3f49cb71ed1731b9c932e3c3426be5926e5036",
 	// main: pkg-base 0.0.136
-	packages: "f1c35897f3ff265670e57517f3b41cd2d362b5d2",
+	packages: "df3f49cb71ed1731b9c932e3c3426be5926e5036",
 }
 
 // a commit needs someone to have made it, and a build machine has no one
