@@ -14,6 +14,7 @@ const themes = [
 	{id: "solarized-light", name: "Solarized Light", colorScheme: "light"},
 	{id: "vesper", name: "Vesper", colorScheme: "dark"},
 	{id: "alabaster", name: "Alabaster", colorScheme: "light"},
+	{id: "bear", name: "Bear", colorScheme: "light"},
 	{id: "paper", name: "Paper", colorScheme: "light"},
 	{id: "synthwave84", name: "Synthwave '84", colorScheme: "dark"},
 	{id: "plan9", name: "Plan 9", colorScheme: "light"},

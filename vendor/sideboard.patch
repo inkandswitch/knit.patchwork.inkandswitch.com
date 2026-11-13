@@ -226,7 +226,7 @@ index 43caf09..7f08cbd 100644
        </Menu>
      </>
 diff --git a/src/sideboard/create-new.tsx b/src/sideboard/create-new.tsx
-index 6e11ae6..eb74e7e 100644
+index 4782f75..8bf65ea 100644
 --- a/src/sideboard/create-new.tsx
 +++ b/src/sideboard/create-new.tsx
 @@ -1,21 +1,24 @@
@@ -300,7 +300,7 @@ index 6e11ae6..eb74e7e 100644
 +    const docLink = await docLinkFromText(props.repo, url);
 +    if (!docLink) return;
      props.changeFolder((doc) => {
-       doc.docs.push(docLink);
+       doc.docs.unshift(docLink);
      });
 @@ -105,6 +122,16 @@ export default function CreateNew(props: CreateNewProps) {
      setOpen(false);
@@ -400,7 +400,7 @@ index eee9b5d..0d4037b 100644
  
  describe("executeDrop", () => {
 diff --git a/src/sideboard/document-list/document-list.tsx b/src/sideboard/document-list/document-list.tsx
-index 7dd9b4e..f3a1671 100644
+index 3462988..0066c0f 100644
 --- a/src/sideboard/document-list/document-list.tsx
 +++ b/src/sideboard/document-list/document-list.tsx
 @@ -98,29 +98,38 @@ export function DocumentList(props: DocumentListProps) {

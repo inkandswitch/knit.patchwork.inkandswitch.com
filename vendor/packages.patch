@@ -1,5 +1,5 @@
 diff --git a/src/install-modal.tsx b/src/install-modal.tsx
-index f1fd8e6..383cd01 100644
+index e49d354..7e193f4 100644
 --- a/src/install-modal.tsx
 +++ b/src/install-modal.tsx
 @@ -14,6 +14,7 @@ import {
@@ -39,7 +39,7 @@ index f1fd8e6..383cd01 100644
 @@ -169,8 +177,7 @@ export function InstallModal(props: {
            </button>
          </header>
-         <p class="pw-install__blurb">
+         <p class="pw-pkg-install__blurb">
 -          Paste an <code>automerge:</code> or <code>https://</code> URL to add
 -          it to your package list.
 +          Paste an <code>https://</code> URL to add it to your package list.
@@ -56,11 +56,11 @@ index f1fd8e6..383cd01 100644
            onInput={(e) => setUrl(e.currentTarget.value)}
            onKeyDown={(e) => {
 diff --git a/src/packages.test.tsx b/src/packages.test.tsx
-index 337e048..d1c36e1 100644
+index 8d76346..1b4a665 100644
 --- a/src/packages.test.tsx
 +++ b/src/packages.test.tsx
 @@ -77,3 +77,31 @@ describe("the filter box", () => {
-     expect(element.querySelector(".pw-modal")).toBeNull();
+     expect(element.querySelector(".pw-pkg-modal")).toBeNull();
    });
  });
 +
@@ -77,9 +77,9 @@ index 337e048..d1c36e1 100644
 +  it("won't install an automerge url", () => {
 +    const { element, search } = mount();
 +    paste(search, "automerge:3psiCwUeZNMFrmtiAkX75Jvy1tED");
-+    const add = element.querySelector<HTMLButtonElement>(".pw-install__add");
++    const add = element.querySelector<HTMLButtonElement>(".pw-pkg-install__add");
 +    expect(add?.disabled).toBe(true);
-+    expect(element.querySelector(".pw-install__error")?.textContent).toMatch(
++    expect(element.querySelector(".pw-pkg-install__error")?.textContent).toMatch(
 +      /Only http/
 +    );
 +  });
@@ -87,7 +87,7 @@ index 337e048..d1c36e1 100644
 +  it("will install an https url", () => {
 +    const { element, search } = mount();
 +    paste(search, "https://example.com/tool/");
-+    const add = element.querySelector<HTMLButtonElement>(".pw-install__add");
++    const add = element.querySelector<HTMLButtonElement>(".pw-pkg-install__add");
 +    expect(add?.disabled).toBe(false);
 +  });
 +});
