@@ -1,0 +1,77 @@
+diff --git a/src/SelectedDocProvider.test.ts b/src/SelectedDocProvider.test.ts
+index 27da1d0..4b64534 100644
+--- a/src/SelectedDocProvider.test.ts
++++ b/src/SelectedDocProvider.test.ts
+@@ -55,3 +55,46 @@ describe("SelectedDocProvider", () => {
+     expect(docs.at(-1)).toEqual([]);
+   });
+ });
++
++const tick = () => new Promise((resolve) => setTimeout(resolve, 10));
++
++describe("SelectedDocProvider, where the site says where it is", () => {
++  let params = new URLSearchParams();
++
++  beforeEach(() => {
++    params = new URLSearchParams();
++    window.patchworkRoute = { params: () => new URLSearchParams(params) };
++  });
++
++  afterEach(() => {
++    delete window.patchworkRoute;
++  });
++
++  it("selects the route's document, not the hash's", async () => {
++    const views: unknown[] = [];
++    subscribe(child, { type: "patchwork:selected-view" }, (view) =>
++      views.push(view)
++    );
++    params = new URLSearchParams({ doc: APPLES, tool: "outline" });
++    // the site announces a move as a change of hash
++    window.dispatchEvent(new HashChangeEvent("hashchange"));
++    await tick();
++    expect(views.at(-1)).toEqual({ url: APPLES, toolId: "outline" });
++    expect(location.hash).toBe("");
++  });
++
++  it("selects the route's document as it starts", async () => {
++    params = new URLSearchParams({ doc: APPLES });
++    const host = document.createElement("div");
++    document.body.append(host);
++    const stop = SelectedDocProvider(host);
++    const seen: unknown[] = [];
++    subscribe(host, { type: "patchwork:selected-doc" }, (urls) =>
++      seen.push(urls)
++    );
++    await tick();
++    expect(seen.at(-1)).toEqual([APPLES]);
++    stop();
++    host.remove();
++  });
++});
+diff --git a/src/SelectedDocProvider.ts b/src/SelectedDocProvider.ts
+index 2d34f7d..7699b33 100644
+--- a/src/SelectedDocProvider.ts
++++ b/src/SelectedDocProvider.ts
+@@ -99,8 +99,20 @@ export const SelectedDocProvider = (element: HTMLElement) => {
+   };
+ };
+ 
++// A site that says where it is some other way than the hash (by path, say)
++// puts `window.patchworkRoute` there, as patchwork's router reads it too:
++// `params()` are the params a hash would have. It still announces a move with
++// a hashchange. (knit.patchwork.inkandswitch.com's src/route.ts)
++declare global {
++  interface Window {
++    patchworkRoute?: { params(): URLSearchParams };
++  }
++}
++
+ const selectedViewFromLocation = (): SelectedView | null => {
+-  const params = new URLSearchParams(window.location.hash.slice(1));
++  const params =
++    window.patchworkRoute?.params() ??
++    new URLSearchParams(window.location.hash.slice(1));
+   const doc = params.get("doc");
+   if (!doc) return null;
+   const url = doc.startsWith("automerge:") ? doc : `automerge:${doc}`;

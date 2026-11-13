@@ -666,10 +666,18 @@ index c961a2d..5807fa5 100644
    return { landed, failed };
  }
 diff --git a/src/sideboard/document-list/item-menu.tsx b/src/sideboard/document-list/item-menu.tsx
-index d531d50..c726a6a 100644
+index d531d50..d2f7e76 100644
 --- a/src/sideboard/document-list/item-menu.tsx
 +++ b/src/sideboard/document-list/item-menu.tsx
-@@ -7,10 +7,10 @@ import {
+@@ -1,20 +1,40 @@
+ import { Menu, MenuItem, SubMenu } from "../popmenu.tsx";
+ import { For, Show } from "solid-js";
+ import {
++  isValidAutomergeUrl,
+   parseAutomergeUrl,
++  type AutomergeUrl,
+   type DocHandle,
+   type Repo,
  } from "@automerge/automerge-repo/slim";
  import type { PatchworkViewElement } from "@inkandswitch/patchwork-elements";
  import type { FolderDoc } from "@inkandswitch/patchwork-filesystem";
@@ -684,16 +692,64 @@ index d531d50..c726a6a 100644
  import { dragstack, clearDragstack } from "../dnd/dnd.ts";
  import { removeItemsByUrl } from "../dnd/operations.ts";
  import { menuTarget, setMenuTarget, type MenuTarget } from "../state.ts";
-@@ -64,7 +64,7 @@ function MenuItems(props: {
+ 
++// A lattice or knitout project's own doc is its layout, which is the
++// sharer's: what a link shares is its files, and whoever opens it gets a
++// project of their own on them (knit's src/share.ts).
++const PROJECT_TYPES = ["lattice:project", "knitoutjs-project"];
++
++/**
++ * A link to `url` on this site, for whoever opens it to get it in their
++ * sidebar, named `name`. `project`: the url is a project's files, and they
++ * get their own project of that type on them.
++ */
++export function shareLink(url: AutomergeUrl, name: string, project?: string) {
++  const { documentId } = parseAutomergeUrl(url);
++  const params = [`share=automerge:${documentId}`];
++  if (name.trim()) params.push(`name=${encodeURIComponent(name.trim())}`);
++  if (project) params.push(`project=${encodeURIComponent(project)}`);
++  return `${location.origin}/#${params.join("&")}`;
++}
++
+ /**
+  * The one context menu shared by every row in a panel. A row opens it by
+  * setting `menuTarget` (see item.tsx); the menu is anchored at the pointer
+@@ -64,10 +84,31 @@ function MenuItems(props: {
  }) {
    const t = props.target;
    const tools = useSupportedToolsForType(t.type);
 -  const datatypes = useFilteredDatatypes((item) => !item.unlisted);
 +  const datatypes = useCreatableDatatypes();
    const multi = () => dragstack.has(t.id) && dragstack.size > 1;
-   const patchworkUrl = () =>
-     `${location.protocol}//${location.host}/#doc=${parseAutomergeUrl(t.url).documentId}`;
-@@ -84,17 +84,31 @@ function MenuItems(props: {
+-  const patchworkUrl = () =>
+-    `${location.protocol}//${location.host}/#doc=${parseAutomergeUrl(t.url).documentId}`;
++  // a project's files, looked for as soon as the menu opens, so they're
++  // (nearly always) there by the time Copy link is chosen
++  const link: Promise<string | null> = PROJECT_TYPES.includes(t.type)
++    ? props.repo.find<{ files?: unknown }>(t.url).then(
++        (handle) => {
++          const files = handle.doc()?.files;
++          return isValidAutomergeUrl(files)
++            ? shareLink(files, t.name, t.type)
++            : null;
++        },
++        () => null
++      )
++    : Promise.resolve(shareLink(t.url, t.name));
++
++  function copyLink() {
++    link.then((text) => {
++      if (!text) {
++        console.error(`sideboard: ${t.url} has no files to share`);
++        return;
++      }
++      return navigator.clipboard.writeText(text);
++    }).catch((error) => console.error("sideboard: couldn't copy the link", error));
++  }
+ 
+   // Remove from the context menu. When this item is part of a multi-selection
+   // (cmd-click or cmd-drag marquee), remove the whole selection — with a
+@@ -84,17 +125,31 @@ function MenuItems(props: {
      await removeItemsByUrl(props.repo, props.rootFolderHandle, urls);
    }
  
@@ -727,10 +783,38 @@ index d531d50..c726a6a 100644
          </SubMenu>
        </Show>
        <Show when={tools.length}>
-@@ -135,6 +149,17 @@ function MenuItems(props: {
-           </SubMenu>
-         </Show>
-       </SubMenu>
+@@ -108,33 +163,18 @@ function MenuItems(props: {
+           </For>
+         </SubMenu>
+       </Show>
+-      <SubMenu label="Copy">
+-        <MenuItem onSelect={() => navigator.clipboard.writeText(t.url)}>
+-          Automerge url
+-        </MenuItem>
+-        <MenuItem
+-          onSelect={() => navigator.clipboard.writeText(patchworkUrl())}
+-        >
+-          Patchwork url
+-        </MenuItem>
+-        <Show when={tools.length}>
+-          <SubMenu label="Patchwork url with...">
+-            <For each={tools}>
+-              {(tool) => (
+-                <MenuItem
+-                  onSelect={() =>
+-                    navigator.clipboard.writeText(
+-                      `${patchworkUrl()}&tool=${tool.id}`
+-                    )
+-                  }
+-                >
+-                  {tool.name}
+-                </MenuItem>
+-              )}
+-            </For>
+-          </SubMenu>
+-        </Show>
+-      </SubMenu>
++      <MenuItem onSelect={copyLink}>Copy link</MenuItem>
 +      <Show when={t.type === "folder"}>
 +        <For each={downloadableArchives()}>
 +          {(archive) => (
@@ -904,7 +988,7 @@ index 0000000..eb0ec79
 +    );
 +}
 diff --git a/src/sideboard/menus.test.tsx b/src/sideboard/menus.test.tsx
-index 2c49251..d278212 100644
+index 2c49251..02b9e97 100644
 --- a/src/sideboard/menus.test.tsx
 +++ b/src/sideboard/menus.test.tsx
 @@ -18,21 +18,25 @@ import CreateNew from "./create-new.tsx";
@@ -1130,7 +1214,74 @@ index 2c49251..d278212 100644
          rootFolderHandle={rootFolderHandle}
          element={container as any}
        />
-@@ -472,11 +558,68 @@ describe("ItemMenu", () => {
+@@ -391,7 +477,7 @@ describe("ItemMenu", () => {
+     expect(itemTexts()).toEqual([
+       "Create",
+       "Open with...",
+-      "Copy",
++      "Copy link",
+       "Rename",
+       "Remove",
+     ]);
+@@ -401,7 +487,7 @@ describe("ItemMenu", () => {
+     mountMenu();
+     setMenuTarget({ ...target, type: "zed", createInside: undefined });
+     await waitFor(menu);
+-    expect(itemTexts()).toEqual(["Copy", "Rename", "Remove"]);
++    expect(itemTexts()).toEqual(["Copy link", "Rename", "Remove"]);
+   });
+ 
+   it("ignores targets outside its panel", async () => {
+@@ -451,19 +537,37 @@ describe("ItemMenu", () => {
+     expect(target.openWith).toHaveBeenCalledWith("outline");
+   });
+ 
+-  it("Copy offers the automerge url, the patchwork url, and per-tool patchwork urls", async () => {
++  it("Copy link copies a link that puts the doc in their sidebar", async () => {
+     mountMenu();
+-    setMenuTarget(target);
++    setMenuTarget({ ...target, name: "My notes" });
+     await waitFor(menu);
+-    click(item("Copy"));
+-    await waitFor(() => menus().length === 2);
+-    expect(itemTexts(menus()[1])).toEqual([
+-      "Automerge url",
+-      "Patchwork url",
+-      "Patchwork url with...",
+-    ]);
+-    click(item("Automerge url"));
+-    expect(navigator.clipboard.writeText).toHaveBeenCalledWith(DOC_URL);
++    click(item("Copy link"));
++    await waitFor(
++      () => (navigator.clipboard.writeText as any).mock.calls.length
++    );
++    expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
++      `${location.origin}/#share=${DOC_URL}&name=My%20notes`
++    );
++  });
++
++  it("Copy link shares a project's files, not its layout", async () => {
++    const files = FAKE_URL;
++    repo.find = vi.fn(async () => ({ doc: () => ({ files, nodes: {} }) }));
++    try {
++      mountMenu();
++      setMenuTarget({ ...target, type: "lattice:project", name: "Hat" });
++      await waitFor(menu);
++      click(item("Copy link"));
++      await waitFor(
++        () => (navigator.clipboard.writeText as any).mock.calls.length
++      );
++      expect(repo.find).toHaveBeenCalledWith(DOC_URL);
++      expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
++        `${location.origin}/#share=${files}&name=Hat&project=lattice%3Aproject`
++      );
++    } finally {
++      delete repo.find;
++    }
+   });
+ 
+   it("Create lists datatypes and creates inside the row", async () => {
+@@ -472,11 +576,68 @@ describe("ItemMenu", () => {
      await waitFor(menu);
      click(item("Create"));
      await waitFor(() => menus().length === 2);

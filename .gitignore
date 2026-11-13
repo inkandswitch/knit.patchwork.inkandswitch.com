@@ -5,6 +5,7 @@
 /.vendor/
 /public/packages/sideboard/dist/
 /public/packages/packages/dist/
+/public/packages/providers/dist/
 .pushwork/
 node_modules/
 playright-report/

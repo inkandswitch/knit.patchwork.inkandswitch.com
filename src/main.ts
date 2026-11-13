@@ -4,6 +4,9 @@ import setup, {
 	showLoadingAnimation,
 } from "@inkandswitch/patchwork"
 import "./main.css"
+import {installRoute} from "./route.ts"
+import {openSharedLinks} from "./share.ts"
+import {watchSidebar} from "./sidebar.ts"
 
 const DEFAULT_PACKAGE_LIST = "/modules.json"
 
@@ -17,6 +20,9 @@ const packageListURL = (
 	.split(",")
 	.map(source => source.trim())
 	.filter(Boolean)
+
+// before setup: patchwork's router asks it where it is as it starts
+const route = installRoute()
 
 showLoadingAnimation()
 
@@ -36,4 +42,8 @@ declare global {
 }
 
 window.accountDocHandle = window.patchwork.account
+
+const sidebar = watchSidebar(window.patchwork.repo as any, window.patchwork.account as any)
+route.start(sidebar)
+openSharedLinks(window.patchwork.repo as any, sidebar)
 hideLoadingAnimation()
