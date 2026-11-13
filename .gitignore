@@ -6,6 +6,8 @@
 /public/packages/sideboard/dist/
 /public/packages/packages/dist/
 /public/packages/providers/dist/
+/public/packages/call/dist/
+/public/packages/threepane/dist/
 .pushwork/
 node_modules/
 playright-report/

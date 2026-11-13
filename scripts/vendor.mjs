@@ -5,9 +5,14 @@
 // package whose commit and patch are the same as at its last build is left
 // alone.
 //
+// A package can follow a branch of pkg-base rather than a release: it says
+// which with `branch`, and `update` moves its commit to that branch's head.
+//
 //   node scripts/vendor.mjs              build what has changed
 //   node scripts/vendor.mjs save <name>  write .vendor/<name>'s changes to
 //                                        vendor/<name>.patch, and build it
+//   node scripts/vendor.mjs update       move each package that follows a
+//                                        branch to its head, and build it
 import {spawnSync} from "node:child_process"
 import {createHash} from "node:crypto"
 import {cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync} from "node:fs"
@@ -24,7 +29,12 @@ const packages = {
 	packages: "1a2ab8caa439d7dbadabb6a7509c12288fdf686b",
 	// main: pkg-base 0.0.152
 	providers: "1a2ab8caa439d7dbadabb6a7509c12288fdf686b",
+	// the call, and the threepane that mounts it (threepane there is 0.0.152's
+	// plus call-provider round the frame and the control panel in the sidebar)
+	call: {branch: "call-package", commit: "03b8741a276b60a72bc35a524bb643080cd46529"},
+	threepane: {branch: "call-package", commit: "03b8741a276b60a72bc35a524bb643080cd46529"},
 }
+const pin = name => (typeof packages[name] === "string" ? {commit: packages[name]} : packages[name])
 
 // a commit needs someone to have made it, and a build machine has no one
 const git = ["-c", "user.name=knit", "-c", "user.email=knit@localhost", "-c", "core.autocrlf=false"]
@@ -72,7 +82,7 @@ async function fetchSource(name, commit, dir) {
 }
 
 async function build(name, force = false) {
-	const commit = packages[name]
+	const {commit} = pin(name)
 	const dir = sourceDir(name)
 	const patch = readPatch(name)
 	const stamp = {commit, patch: hash(patch)}
@@ -113,6 +123,26 @@ if (command === "save") {
 	if (!(name in packages)) throw new Error(`no vendored package "${name}"`)
 	writeFileSync(patchFile(name), changes(sourceDir(name)))
 	await build(name, true)
+} else if (command === "update") {
+	const script = fileURLToPath(import.meta.url)
+	let source = readFileSync(script, "utf8")
+	for (const name of Object.keys(packages)) {
+		const {branch, commit} = pin(name)
+		if (!branch) continue
+		const head = run("git", ["ls-remote", `https://github.com/${repo}`, `refs/heads/${branch}`], root, {
+			stdio: ["ignore", "pipe", "inherit"],
+			encoding: "utf8",
+		}).split(/\s/)[0]
+		if (!head) throw new Error(`no branch "${branch}" in ${repo}`)
+		if (head === commit) continue
+		console.log(`vendor: ${name} ${commit.slice(0, 7)} -> ${head.slice(0, 7)} (${branch})`)
+		const line = `${name}: {branch: "${branch}", commit: "${commit}"}`
+		if (!source.includes(line)) throw new Error(`couldn't find ${name}'s pin in ${script}`)
+		source = source.replace(line, `${name}: {branch: "${branch}", commit: "${head}"}`)
+		packages[name].commit = head
+	}
+	writeFileSync(script, source)
+	for (const name of Object.keys(packages)) await build(name)
 } else if (command) {
 	throw new Error(`unknown command "${command}"`)
 } else {

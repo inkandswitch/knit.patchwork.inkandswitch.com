@@ -16,6 +16,7 @@
 		"./packages/doc-presence/",
 		"./packages/comments-view/",
 		"./packages/threepane/",
+		"./packages/call/",
 		"./packages/codemirror-base/",
 		"./packages/codemirror-markdown/",
 		"./packages/sideboard/",
