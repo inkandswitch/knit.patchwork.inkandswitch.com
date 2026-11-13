@@ -12,6 +12,10 @@ export type Entry = {
 // a lattice or knitout project's own doc is its layout, which is yours. what's
 // shared, and named in the address, is its files
 export const PROJECT_TYPES = ["lattice:project", "knitoutjs-project"]
+// knitoutjs's projects from before. the knitoutjs tool updates one to a
+// knitoutjs-project as it opens it, but its link here keeps the old type: so
+// a link's type isn't what a project is now, its doc's is
+const OLD_PROJECT_TYPES = ["prototype-knitoutjs-panes", "knitoutjs-panes"]
 
 /** The url an entry's address and share link are for: a project's files. */
 export const sharedUrl = (entry: Entry) => entry.files ?? entry.url
@@ -25,7 +29,7 @@ type Handle<T> = {
 }
 type Repo = {find<T>(url: string): Promise<Handle<T>>}
 type FolderDoc = {docs?: Array<Partial<Entry> | null>}
-type ProjectDoc = {files?: unknown}
+type ProjectDoc = {"@patchwork"?: {type?: string}; files?: unknown}
 type AccountDoc = {rootFolderUrl?: string}
 
 export type Sidebar = {
@@ -80,8 +84,10 @@ export function watchSidebar(repo: Repo, account: Handle<AccountDoc>): Sidebar {
 			handle => {
 				clearTimeout(timer)
 				const update = () => {
-					const files = handle.doc()?.files
-					putFiles(url, typeof files === "string" && files.startsWith("automerge:") ? files : null)
+					const doc = handle.doc()
+					const files = doc?.files
+					const project = PROJECT_TYPES.includes(String(doc?.["@patchwork"]?.type ?? ""))
+					putFiles(url, project && typeof files === "string" && files.startsWith("automerge:") ? files : null)
 				}
 				handle.on("change", update)
 				update()
@@ -122,7 +128,7 @@ export function watchSidebar(repo: Repo, account: Handle<AccountDoc>): Sidebar {
 			for (const link of doc?.docs ?? []) {
 				if (!link?.url) continue
 				const entry: Entry = {name: String(link.name ?? ""), type: String(link.type ?? ""), url: String(link.url)}
-				if (PROJECT_TYPES.includes(entry.type)) {
+				if (PROJECT_TYPES.includes(entry.type) || OLD_PROJECT_TYPES.includes(entry.type)) {
 					watchProject(entry.url)
 					const files = projects.get(entry.url)
 					if (files === undefined) all = false
