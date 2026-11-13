@@ -666,10 +666,10 @@ index c961a2d..5807fa5 100644
    return { landed, failed };
  }
 diff --git a/src/sideboard/document-list/item-menu.tsx b/src/sideboard/document-list/item-menu.tsx
-index d531d50..d2f7e76 100644
+index d531d50..b1d8f5e 100644
 --- a/src/sideboard/document-list/item-menu.tsx
 +++ b/src/sideboard/document-list/item-menu.tsx
-@@ -1,20 +1,40 @@
+@@ -1,20 +1,108 @@
  import { Menu, MenuItem, SubMenu } from "../popmenu.tsx";
  import { For, Show } from "solid-js";
  import {
@@ -685,6 +685,7 @@ index d531d50..d2f7e76 100644
 -  useSupportedToolsForType,
 -  useFilteredDatatypes,
 -} from "../lib/solid-plugins";
++import { getRegistry } from "@inkandswitch/patchwork-plugins";
 +import { useSupportedToolsForType } from "../lib/solid-plugins";
 +import { label, useCreatableDatatypes } from "../knit-datatypes.ts";
 +import { downloadableArchives, downloadArchive } from "../knit-archives.ts";
@@ -694,9 +695,76 @@ index d531d50..d2f7e76 100644
  import { menuTarget, setMenuTarget, type MenuTarget } from "../state.ts";
  
 +// A lattice or knitout project's own doc is its layout, which is the
-+// sharer's: what a link shares is its files, and whoever opens it gets a
-+// project of their own on them (knit's src/share.ts).
++// sharer's: what a link shares is its files folder, and whoever opens it gets
++// a project of their own on them (knit's src/share.ts).
 +const PROJECT_TYPES = ["lattice:project", "knitoutjs-project"];
++// knitoutjs's projects from before: {title, files: [urls], layout}, with no
++// folder to share. The knitoutjs tool updates one to a knitoutjs-project as
++// it opens it, but its link in the sidebar keeps the old type, so a row's
++// type can be either, whatever the doc is now.
++const OLD_PROJECT_TYPES = ["prototype-knitoutjs-panes", "knitoutjs-panes"];
++
++type ProjectDoc = {
++  "@patchwork"?: { type?: string };
++  files?: unknown;
++};
++
++const typeOf = (doc: ProjectDoc | undefined) => doc?.["@patchwork"]?.type ?? "";
++
++// One from before, updated in place by knitoutjs's own migration (the one its
++// tool runs as it opens it), from wherever the knitoutjs package was loaded.
++async function updateOldProject(handle: DocHandle<ProjectDoc>, repo: Repo) {
++  const tool = getRegistry("patchwork:tool").get("knitoutjs-project");
++  if (!tool?.importUrl) {
++    throw new Error("the knitoutjs package isn't loaded, to update it with");
++  }
++  const { updateKnitoutjs } = await import(
++    /* @vite-ignore */ new URL("./migrate.js", tool.importUrl).href
++  );
++  // on the doc itself, not a draft's copy of it
++  const base = (repo as Repo & { baseRepo?: Repo }).baseRepo ?? repo;
++  await updateKnitoutjs(handle, base, (window as { hive?: unknown }).hive);
++}
++
++/**
++ * The link that shares a row: a project's files folder (updating one from
++ * before, which has none, first), or the doc itself.
++ */
++export async function linkFor(
++  repo: Repo,
++  { url, name, type }: { url: AutomergeUrl; name: string; type: string }
++): Promise<string> {
++  if (!PROJECT_TYPES.includes(type) && !OLD_PROJECT_TYPES.includes(type)) {
++    return shareLink(url, name);
++  }
++  const handle = await repo.find<ProjectDoc>(url);
++  if (OLD_PROJECT_TYPES.includes(typeOf(handle.doc()))) {
++    await updateOldProject(handle, repo);
++  }
++  const doc = handle.doc();
++  const now = typeOf(doc);
++  if (PROJECT_TYPES.includes(now) && isValidAutomergeUrl(doc?.files)) {
++    return shareLink(doc.files, name, now);
++  }
++  // a project's layout is never shared
++  throw new Error(`${url} (${now || "no type"}) has no files folder to share`);
++}
++
++// The clipboard, given the text once it's known: as a promise where the
++// browser takes one, so the copy still counts as the click's (Safari)
++function copyWhenKnown(text: Promise<string>) {
++  if (
++    typeof ClipboardItem !== "undefined" &&
++    (ClipboardItem.supports?.("text/plain") ?? true)
++  ) {
++    return navigator.clipboard.write([
++      new ClipboardItem({
++        "text/plain": text.then((t) => new Blob([t], { type: "text/plain" })),
++      }),
++    ]);
++  }
++  return text.then((t) => navigator.clipboard.writeText(t));
++}
 +
 +/**
 + * A link to `url` on this site, for whoever opens it to get it in their
@@ -714,7 +782,7 @@ index d531d50..d2f7e76 100644
  /**
   * The one context menu shared by every row in a panel. A row opens it by
   * setting `menuTarget` (see item.tsx); the menu is anchored at the pointer
-@@ -64,10 +84,31 @@ function MenuItems(props: {
+@@ -64,10 +152,13 @@ function MenuItems(props: {
  }) {
    const t = props.target;
    const tools = useSupportedToolsForType(t.type);
@@ -723,33 +791,15 @@ index d531d50..d2f7e76 100644
    const multi = () => dragstack.has(t.id) && dragstack.size > 1;
 -  const patchworkUrl = () =>
 -    `${location.protocol}//${location.host}/#doc=${parseAutomergeUrl(t.url).documentId}`;
-+  // a project's files, looked for as soon as the menu opens, so they're
-+  // (nearly always) there by the time Copy link is chosen
-+  const link: Promise<string | null> = PROJECT_TYPES.includes(t.type)
-+    ? props.repo.find<{ files?: unknown }>(t.url).then(
-+        (handle) => {
-+          const files = handle.doc()?.files;
-+          return isValidAutomergeUrl(files)
-+            ? shareLink(files, t.name, t.type)
-+            : null;
-+        },
-+        () => null
-+      )
-+    : Promise.resolve(shareLink(t.url, t.name));
-+
 +  function copyLink() {
-+    link.then((text) => {
-+      if (!text) {
-+        console.error(`sideboard: ${t.url} has no files to share`);
-+        return;
-+      }
-+      return navigator.clipboard.writeText(text);
-+    }).catch((error) => console.error("sideboard: couldn't copy the link", error));
++    copyWhenKnown(linkFor(props.repo, t)).catch((error) =>
++      console.error("sideboard: couldn't copy the link", error)
++    );
 +  }
  
    // Remove from the context menu. When this item is part of a multi-selection
    // (cmd-click or cmd-drag marquee), remove the whole selection — with a
-@@ -84,17 +125,31 @@ function MenuItems(props: {
+@@ -84,17 +175,31 @@ function MenuItems(props: {
      await removeItemsByUrl(props.repo, props.rootFolderHandle, urls);
    }
  
@@ -783,7 +833,7 @@ index d531d50..d2f7e76 100644
          </SubMenu>
        </Show>
        <Show when={tools.length}>
-@@ -108,33 +163,18 @@ function MenuItems(props: {
+@@ -108,33 +213,18 @@ function MenuItems(props: {
            </For>
          </SubMenu>
        </Show>
@@ -988,7 +1038,7 @@ index 0000000..eb0ec79
 +    );
 +}
 diff --git a/src/sideboard/menus.test.tsx b/src/sideboard/menus.test.tsx
-index 2c49251..02b9e97 100644
+index 2c49251..628bc3e 100644
 --- a/src/sideboard/menus.test.tsx
 +++ b/src/sideboard/menus.test.tsx
 @@ -18,21 +18,25 @@ import CreateNew from "./create-new.tsx";
@@ -1205,7 +1255,25 @@ index 2c49251..02b9e97 100644
          onDismiss={onDismiss}
          clearFilter={vi.fn()}
        />
-@@ -377,7 +463,7 @@ describe("ItemMenu", () => {
+@@ -368,8 +454,16 @@ describe("ItemMenu", () => {
+       remove: vi.fn(),
+       createInside: vi.fn(),
+     };
++    const writeText = vi.fn(async (_text: string) => {});
+     Object.defineProperty(navigator, "clipboard", {
+-      value: { writeText: vi.fn(async () => {}) },
++      value: {
++        writeText,
++        // what a ClipboardItem's promise comes to, as plain text
++        write: vi.fn(async (items: ClipboardItem[]) => {
++          const blob = await items[0].getType("text/plain");
++          await writeText(await blob.text());
++        }),
++      },
+       configurable: true,
+     });
+   });
+@@ -377,7 +471,7 @@ describe("ItemMenu", () => {
    const mountMenu = () =>
      mount(() => (
        <ItemMenu
@@ -1214,7 +1282,7 @@ index 2c49251..02b9e97 100644
          rootFolderHandle={rootFolderHandle}
          element={container as any}
        />
-@@ -391,7 +477,7 @@ describe("ItemMenu", () => {
+@@ -391,7 +485,7 @@ describe("ItemMenu", () => {
      expect(itemTexts()).toEqual([
        "Create",
        "Open with...",
@@ -1223,7 +1291,7 @@ index 2c49251..02b9e97 100644
        "Rename",
        "Remove",
      ]);
-@@ -401,7 +487,7 @@ describe("ItemMenu", () => {
+@@ -401,7 +495,7 @@ describe("ItemMenu", () => {
      mountMenu();
      setMenuTarget({ ...target, type: "zed", createInside: undefined });
      await waitFor(menu);
@@ -1232,7 +1300,7 @@ index 2c49251..02b9e97 100644
    });
  
    it("ignores targets outside its panel", async () => {
-@@ -451,19 +537,37 @@ describe("ItemMenu", () => {
+@@ -451,19 +545,89 @@ describe("ItemMenu", () => {
      expect(target.openWith).toHaveBeenCalledWith("outline");
    });
  
@@ -1262,7 +1330,9 @@ index 2c49251..02b9e97 100644
 +
 +  it("Copy link shares a project's files, not its layout", async () => {
 +    const files = FAKE_URL;
-+    repo.find = vi.fn(async () => ({ doc: () => ({ files, nodes: {} }) }));
++    repo.find = vi.fn(async () => ({
++      doc: () => ({ "@patchwork": { type: "lattice:project" }, files, nodes: {} }),
++    }));
 +    try {
 +      mountMenu();
 +      setMenuTarget({ ...target, type: "lattice:project", name: "Hat" });
@@ -1278,10 +1348,60 @@ index 2c49251..02b9e97 100644
 +    } finally {
 +      delete repo.find;
 +    }
++  });
++
++  it("Copy link goes by what the doc is now, not the row's old type", async () => {
++    // the knitoutjs tool updated it as it opened it; its row still says
++    // knitoutjs-panes
++    const files = FAKE_URL;
++    repo.find = vi.fn(async () => ({
++      doc: () => ({
++        "@patchwork": { type: "knitoutjs-project" },
++        files,
++        nodes: {},
++      }),
++    }));
++    try {
++      mountMenu();
++      setMenuTarget({ ...target, type: "knitoutjs-panes", name: "Hat" });
++      await waitFor(menu);
++      click(item("Copy link"));
++      await waitFor(
++        () => (navigator.clipboard.writeText as any).mock.calls.length
++      );
++      expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
++        `${location.origin}/#share=${files}&name=Hat&project=knitoutjs-project`
++      );
++    } finally {
++      delete repo.find;
++    }
++  });
++
++  it("Copy link never shares a project's layout", async () => {
++    // from before, with no knitoutjs package loaded to update it
++    repo.find = vi.fn(async () => ({
++      doc: () => ({
++        "@patchwork": { type: "knitoutjs-panes" },
++        files: [FAKE_URL],
++        layout: {},
++      }),
++    }));
++    const error = vi.spyOn(console, "error").mockImplementation(() => {});
++    try {
++      mountMenu();
++      setMenuTarget({ ...target, type: "knitoutjs-panes", name: "Hat" });
++      await waitFor(menu);
++      click(item("Copy link"));
++      await waitFor(() => error.mock.calls.length);
++      expect(navigator.clipboard.writeText).not.toHaveBeenCalled();
++    } finally {
++      delete repo.find;
++      error.mockRestore();
++    }
    });
  
    it("Create lists datatypes and creates inside the row", async () => {
-@@ -472,11 +576,68 @@ describe("ItemMenu", () => {
+@@ -472,11 +636,68 @@ describe("ItemMenu", () => {
      await waitFor(menu);
      click(item("Create"));
      await waitFor(() => menus().length === 2);
