@@ -1,0 +1,193 @@
+diff --git a/src/button.js b/src/button.js
+index e848f5b..485f766 100644
+--- a/src/button.js
++++ b/src/button.js
+@@ -7,6 +7,7 @@ import { render } from "solid-js/web";
+ import html from "solid-js/html";
+ import { subscribe } from "@inkandswitch/patchwork-providers";
+ import { CALL, CALL_EVENT } from "./protocol-names.js";
++import { projectFiles } from "./engine/room.js";
+ import { icon } from "./ui/icons.js";
+ import "./ui/styles.css";
+ 
+@@ -15,8 +16,10 @@ const LABELS = { call: "call everyone here", join: "join the call", here: "hang
+ 
+ export default function CallDoctitleButton(handle, element) {
+   // the doc the frame has open: the view's own url (the handle may be a
+-  // draft's, presenting it)
+-  const url = element.closest?.("patchwork-view")?.getAttribute("doc-url") ?? handle.url;
++  // draft's, presenting it). a project's call is on its files, not its
++  // layout (engine/room.js)
++  const url =
++    projectFiles(handle.doc?.()) ?? element.closest?.("patchwork-view")?.getAttribute("doc-url") ?? handle.url;
+   const [room, setRoom] = createSignal(null);
+   let unsubscribe = subscribe(element, { type: CALL, url }, setRoom);
+   // a provider that turns up after this asked (loaded late, or swapped in
+diff --git a/src/engine/room.js b/src/engine/room.js
+index 107b983..40d03cc 100644
+--- a/src/engine/room.js
++++ b/src/engine/room.js
+@@ -26,6 +26,30 @@ export function keyRoom(bytes) {
+ 
+ export const isKeyRoom = (id) => typeof id === "string" && KEY.test(id);
+ 
++// a lattice or knitout project's own doc is its layout, which is each
++// person's own: what's shared is its files (a folder), so that's its room.
++// (knit: vendor/call.patch)
++const PROJECT_TYPES = new Set(["lattice:project", "knitoutjs-project", "knitoutjs-panes", "prototype-knitoutjs-panes"]);
++
++/** a project doc's files (the room it's in), or null for any other doc */
++export function projectFiles(doc) {
++  if (!PROJECT_TYPES.has(doc?.["@patchwork"]?.type)) return null;
++  const files = roomUrl(doc.files);
++  return files && !isKeyRoom(files) ? files : null;
++}
++
++/** the room `url` names, once its doc's been looked at: a project's is its files */
++export async function sharedRoom(url) {
++  const id = roomUrl(url);
++  const repo = pageRepo();
++  if (!id || isKeyRoom(id) || !repo) return id;
++  try {
++    return projectFiles((await repo.find(id)).doc?.()) ?? id;
++  } catch {
++    return id;
++  }
++}
++
+ /** the page's repo, wherever this host put it (not a draft overlay's) */
+ export function pageRepo() {
+   return globalThis.repo ?? globalThis.patchwork?.repo ?? null;
+diff --git a/src/provider.js b/src/provider.js
+index 34239c2..840dff9 100644
+--- a/src/provider.js
++++ b/src/provider.js
+@@ -6,7 +6,7 @@ import { render } from "solid-js/web";
+ import html from "solid-js/html";
+ import { accept } from "@inkandswitch/patchwork-providers";
+ import { ask, call, hangUp, hearRoom, holdVideoSpot } from "./engine/call.js";
+-import { roomUrl } from "./engine/room.js";
++import { roomUrl, sharedRoom } from "./engine/room.js";
+ import { CALL, CALL_EVENT, CALL_ROOM, CALL_VIDEO, roomState } from "./protocol.js";
+ import { CallFloating, CallQuestion, CallStage } from "./ui/ui.js";
+ import { stageArea } from "./ui/area.js";
+@@ -28,14 +28,26 @@ function answer(event, read, hold) {
+ }
+ 
+ export function CallProvider(element) {
+-  // what each doc mounted inside holds: by room id, a release each time
++  // what each doc mounted inside holds: by its own room id, a release (to
++  // come) each time. a project's room is its files, which a look at its doc
++  // says (engine/room.js)
+   const mounts = new Map();
+ 
+   function hold(url) {
+     const id = roomUrl(url);
+     if (!id) return;
+     if (!mounts.has(id)) mounts.set(id, []);
+-    mounts.get(id).push(hearRoom(id, { onScreen: true }));
++    // (let go before the room's known, it's let go as soon as it is)
++    const holding = { release: null, gone: false };
++    sharedRoom(id).then((room) => {
++      holding.release = hearRoom(room, { onScreen: true });
++      if (holding.gone) holding.release();
++    });
++    mounts.get(id).push(holding);
++  }
++  function release(holding) {
++    holding.gone = true;
++    holding.release?.();
+   }
+ 
+   function onMounted(event) {
+@@ -46,7 +58,7 @@ export function CallProvider(element) {
+     const id = "url" in (event.detail ?? {}) ? roomUrl(event.detail.url) : null;
+     const held = id && mounts.get(id);
+     if (!held) return;
+-    held.pop()();
++    release(held.pop());
+     if (!held.length) mounts.delete(id);
+   }
+ 
+@@ -99,7 +111,7 @@ export function CallProvider(element) {
+     element.removeEventListener("patchwork:unmounted", onUnmounted);
+     element.removeEventListener("patchwork:subscribe", onSubscribe);
+     element.removeEventListener(CALL_EVENT, onCall);
+-    for (const held of mounts.values()) for (const release of held) release();
++    for (const held of mounts.values()) held.forEach(release);
+     mounts.clear();
+     unrender();
+     layer.remove();
+diff --git a/test/button.test.js b/test/button.test.js
+index c19a7ae..aa778c2 100644
+--- a/test/button.test.js
++++ b/test/button.test.js
+@@ -18,7 +18,7 @@ afterEach(() => {
+   host.remove();
+ });
+ 
+-async function mount({ answering = true } = {}) {
++async function mount({ answering = true, handle = { url: "automerge:doc" } } = {}) {
+   if (answering) {
+     host.addEventListener("patchwork:subscribe", (event) => {
+       asked = event.detail.selector;
+@@ -29,7 +29,7 @@ async function mount({ answering = true } = {}) {
+     });
+   }
+   const { default: CallDoctitleButton } = await import("../src/button.js");
+-  stop = CallDoctitleButton({ url: "automerge:doc" }, element);
++  stop = CallDoctitleButton(handle, element);
+   await settle();
+ }
+ const button = () => element.querySelector("button");
+@@ -91,3 +91,14 @@ test("a provider that turns up later is asked again", async () => {
+   await say({});
+   expect(button()?.dataset.state).toBe("call");
+ });
++
++// knit: vendor/call.patch
++test("a project's call is on its files, not its layout (which is yours)", async () => {
++  const files = "automerge:2j9knpCseyhnK8izDmLpGP5WMdZQ";
++  const doc = { "@patchwork": { type: "knitoutjs-project" }, files, nodes: {} };
++  await mount({ handle: { url: "automerge:layout", doc: () => doc } });
++  expect(asked).toEqual({ type: "patchwork:call", url: files });
++  await say({});
++  button().click();
++  expect(sent[0]).toMatchObject({ action: "ask", url: files });
++});
+diff --git a/test/provider.test.js b/test/provider.test.js
+index a23794c..e611ab5 100644
+--- a/test/provider.test.js
++++ b/test/provider.test.js
+@@ -109,6 +109,31 @@ describe("arriving late", () => {
+   });
+ });
+ 
++// knit: vendor/call.patch
++describe("projects", () => {
++  test("a lattice or knitout project on screen puts you in its files' room, not its layout's", async () => {
++    const layout = generateAutomergeUrl();
++    const files = generateAutomergeUrl();
++    handles.set(layout, { ...fakeHandle(layout), doc: () => ({ "@patchwork": { type: "lattice:project" }, files }) });
++    mounted(layout);
++    await settle();
++    here(files);
++    expect(engine.call.rooms().map((r) => r.url)).toEqual([files]);
++    unmounted(layout);
++    expect(engine.call.rooms()).toHaveLength(0);
++  });
++
++  test("unmounted before its doc's been looked at, it's let go once it has been", async () => {
++    const layout = generateAutomergeUrl();
++    const files = generateAutomergeUrl();
++    handles.set(layout, { ...fakeHandle(layout), doc: () => ({ "@patchwork": { type: "knitoutjs-project" }, files }) });
++    mounted(layout);
++    unmounted(layout);
++    await settle();
++    expect(engine.call.rooms()).toHaveLength(0);
++  });
++});
++
+ describe("subscriptions", () => {
+   test("patchwork:call says whether there's a call on a doc", async () => {
+     const url = generateAutomergeUrl();
