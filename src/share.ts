@@ -52,7 +52,7 @@ async function receive(
 	const entries = await sidebar.whenReady()
 	if (project && PROJECT_TYPES.includes(project)) {
 		// one you've got on those files already
-		const yours = entries.find(entry => PROJECT_TYPES.includes(entry.type) && entry.files === url)
+		const yours = entries.find(entry => entry.files === url)
 		if (yours) return yours.url
 		const files = await findSoon(repo, url)
 		const title = name || String(files?.title ?? "") || "untitled"
