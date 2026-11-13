@@ -8,9 +8,7 @@
 // were), and you get a project of your own on them, as lattice's share links
 // do.
 
-import type {Entry, Sidebar} from "./sidebar.ts"
-
-const PROJECT_TYPES = ["lattice:project", "knitoutjs-project"]
+import {PROJECT_TYPES, type Entry, type Sidebar} from "./sidebar.ts"
 // a doc that's slow to come is shared without its type or title
 const SLOW = 10_000
 
@@ -54,11 +52,8 @@ async function receive(
 	const entries = await sidebar.whenReady()
 	if (project && PROJECT_TYPES.includes(project)) {
 		// one you've got on those files already
-		for (const entry of entries) {
-			if (!PROJECT_TYPES.includes(entry.type)) continue
-			const doc = await findSoon(repo, entry.url)
-			if (doc?.files === url) return entry.url
-		}
+		const yours = entries.find(entry => PROJECT_TYPES.includes(entry.type) && entry.files === url)
+		if (yours) return yours.url
 		const files = await findSoon(repo, url)
 		const title = name || String(files?.title ?? "") || "untitled"
 		const mine = await repo.create2<Doc & {nodes: object}>({

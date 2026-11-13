@@ -2,15 +2,17 @@
 // (window.patchworkRoute, patches/@inkandswitch__patchwork.patch and
 // vendor/providers.patch): the params patchwork keeps in the hash
 // (doc, tool, draft, …), with a doc that's in your sidebar named by the path
-// instead, as /docs/<name>-<short> (paths.ts). Any other doc, or another
-// frame, keeps patchwork's /#doc=automerge:….
+// instead, as /docs/<name>-<short> (paths.ts). A lattice or knitout
+// project's <short> is its files' (the folder that's shared, not its layout,
+// which is yours): the path opens your project on those files. Any other doc,
+// or another frame, keeps patchwork's /#doc=automerge:….
 //
 // Moving changes the address with pushState, then tells everything that
 // follows the hash (the router, the selected-doc provider, drafts) with a
 // hashchange, as a change of hash would.
 
 import {docPath, parsePath, shortIdOf} from "./paths.ts"
-import type {Entry, Sidebar} from "./sidebar.ts"
+import {sharedUrl, type Entry, type Sidebar} from "./sidebar.ts"
 
 declare global {
 	interface Window {
@@ -25,7 +27,7 @@ export type PatchworkRoute = {
 	go(params: URLSearchParams): void
 }
 
-// short id → url, for every doc the path has named: so a reload opens the doc
+// short id → url (of the doc that opens), for every doc the path has named: so a reload opens the doc
 // straight away, before the sidebar's been looked through
 const CACHE_KEY = "knit:doc-paths"
 const CACHE_SIZE = 500
@@ -102,8 +104,8 @@ export function installRoute() {
 		let path = "/"
 		if (entry && !params.has("frame")) {
 			for (const key of ["doc", ...HINTS]) params.delete(key)
-			remember(shortIdOf(entry.url), entry.url)
-			path = docPath(entry)
+			remember(shortIdOf(sharedUrl(entry)), entry.url)
+			path = docPath({url: sharedUrl(entry), name: entry.name})
 		}
 		const hash = serializeHash(params)
 		return new URL(`${path}${location.search}${hash ? `#${hash}` : ""}`, location.origin)
@@ -158,7 +160,7 @@ export function installRoute() {
 				byShort = new Map()
 				byUrl = new Map()
 				for (const entry of found.entries()) {
-					const short = shortIdOf(entry.url)
+					const short = shortIdOf(sharedUrl(entry))
 					if (!byShort.has(short)) byShort.set(short, entry)
 					byUrl.set(entry.url, entry)
 				}
