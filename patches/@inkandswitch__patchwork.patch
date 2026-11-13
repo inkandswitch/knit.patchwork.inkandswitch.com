@@ -1,0 +1,49 @@
+diff --git a/dist/router.js b/dist/router.js
+index bc04f1917b3762c3870b60ecfd92ef894b5d814c..554194adc471cb1301c8e55e528110d2148d8aec 100644
+--- a/dist/router.js
++++ b/dist/router.js
+@@ -41,6 +41,14 @@ export function docParamToUrl(docParam) {
+         return undefined;
+     return stringifyAutomergeUrl({ documentId: documentId });
+ }
++// A site that says where it is some other way than the hash (by path, say)
++// puts `window.patchworkRoute` there before setup: `params()`, the params a
++// hash would have, and `go(params)`, which moves there and announces it with
++// a hashchange. (knit.patchwork.inkandswitch.com's src/route.ts)
++function routeParams() {
++    return (window.patchworkRoute?.params() ??
++        new URLSearchParams(window.location.hash.slice(1)));
++}
+ function registeredFrameToolId() {
+     return getRegistry("patchwork:tool")
+         .filter((tool) => !!tool.tags?.includes("frame-tool") && !tool.unlisted)
+@@ -61,7 +69,7 @@ export function createRouter({ rootElement, repo, accountDocHandle, siteTitle, f
+             location.replace(`#${rewritten}`);
+             return;
+         }
+-        const params = new URLSearchParams(hash);
++        const params = routeParams();
+         const docUrl = docParamToUrl(params.get("doc"));
+         const frame = params.get("frame");
+         homeFrameToolId ??=
+@@ -101,7 +109,7 @@ export function createRouter({ rootElement, repo, accountDocHandle, siteTitle, f
+     };
+     rootElement.addEventListener("patchwork:open-document", (event) => {
+         const { url, toolId, type, title } = event.detail;
+-        const params = new URLSearchParams(window.location.hash.slice(1));
++        const params = routeParams();
+         // `doc` is the full automerge URL, so heads live inside it and the separate
+         // `heads=` param is gone.
+         params.delete("heads");
+@@ -124,7 +132,10 @@ export function createRouter({ rootElement, repo, accountDocHandle, siteTitle, f
+             else
+                 params.delete(key);
+         }
+-        window.location.hash = serializeHashParams(params);
++        if (window.patchworkRoute)
++            window.patchworkRoute.go(params);
++        else
++            window.location.hash = serializeHashParams(params);
+         void tabTitle.follow(url, type);
+     });
+     window.addEventListener("hashchange", route);

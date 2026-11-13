@@ -9,3 +9,5 @@ minimumReleaseAgeExclude:
   - "@automerge/*"
 overrides:
   "@automerge/automerge": 3.4.1
+patchedDependencies:
+  '@inkandswitch/patchwork': patches/@inkandswitch__patchwork.patch

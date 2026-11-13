@@ -22,6 +22,8 @@ const packages = {
 	sideboard: "be399edd0cc8603c1874c69684d5334cdfb56433",
 	// main: pkg-base 0.0.150
 	packages: "be399edd0cc8603c1874c69684d5334cdfb56433",
+	// main: pkg-base 0.0.150
+	providers: "be399edd0cc8603c1874c69684d5334cdfb56433",
 }
 
 // a commit needs someone to have made it, and a build machine has no one
