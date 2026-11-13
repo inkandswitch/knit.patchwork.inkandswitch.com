@@ -666,10 +666,10 @@ index c961a2d..5807fa5 100644
    return { landed, failed };
  }
 diff --git a/src/sideboard/document-list/item-menu.tsx b/src/sideboard/document-list/item-menu.tsx
-index d531d50..b1d8f5e 100644
+index d531d50..fa35a5a 100644
 --- a/src/sideboard/document-list/item-menu.tsx
 +++ b/src/sideboard/document-list/item-menu.tsx
-@@ -1,20 +1,108 @@
+@@ -1,20 +1,111 @@
  import { Menu, MenuItem, SubMenu } from "../popmenu.tsx";
  import { For, Show } from "solid-js";
  import {
@@ -718,9 +718,12 @@ index d531d50..b1d8f5e 100644
 +  if (!tool?.importUrl) {
 +    throw new Error("the knitoutjs package isn't loaded, to update it with");
 +  }
-+  const { updateKnitoutjs } = await import(
-+    /* @vite-ignore */ new URL("./migrate.js", tool.importUrl).href
-+  );
++  // importUrl is the package (…/knitoutjs/), or the module it was loaded
++  // from (…/knitoutjs/app/index.js)
++  const migrate = tool.importUrl.endsWith("/")
++    ? new URL("app/migrate.js", tool.importUrl)
++    : new URL("./migrate.js", tool.importUrl);
++  const { updateKnitoutjs } = await import(/* @vite-ignore */ migrate.href);
 +  // on the doc itself, not a draft's copy of it
 +  const base = (repo as Repo & { baseRepo?: Repo }).baseRepo ?? repo;
 +  await updateKnitoutjs(handle, base, (window as { hive?: unknown }).hive);
@@ -782,7 +785,7 @@ index d531d50..b1d8f5e 100644
  /**
   * The one context menu shared by every row in a panel. A row opens it by
   * setting `menuTarget` (see item.tsx); the menu is anchored at the pointer
-@@ -64,10 +152,13 @@ function MenuItems(props: {
+@@ -64,10 +155,13 @@ function MenuItems(props: {
  }) {
    const t = props.target;
    const tools = useSupportedToolsForType(t.type);
@@ -799,7 +802,7 @@ index d531d50..b1d8f5e 100644
  
    // Remove from the context menu. When this item is part of a multi-selection
    // (cmd-click or cmd-drag marquee), remove the whole selection — with a
-@@ -84,17 +175,31 @@ function MenuItems(props: {
+@@ -84,17 +178,31 @@ function MenuItems(props: {
      await removeItemsByUrl(props.repo, props.rootFolderHandle, urls);
    }
  
@@ -833,7 +836,7 @@ index d531d50..b1d8f5e 100644
          </SubMenu>
        </Show>
        <Show when={tools.length}>
-@@ -108,33 +213,18 @@ function MenuItems(props: {
+@@ -108,33 +216,18 @@ function MenuItems(props: {
            </For>
          </SubMenu>
        </Show>
