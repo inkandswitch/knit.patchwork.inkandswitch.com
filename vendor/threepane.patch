@@ -91,7 +91,7 @@ index 0000000..21a54ac
 +  });
 +});
 diff --git a/src/components/MainDocumentView.tsx b/src/components/MainDocumentView.tsx
-index a8c4b2a..2094344 100644
+index df84581..6a2302d 100644
 --- a/src/components/MainDocumentView.tsx
 +++ b/src/components/MainDocumentView.tsx
 @@ -1,6 +1,18 @@
@@ -128,10 +128,10 @@ index a8c4b2a..2094344 100644
 +    return window.patchworkRoute?.placeholder?.() ?? undefined;
 +  };
 +
-   return (
-     <div class="document-view" ref={ref}>
-       <Show when={viewKey()} keyed>
-@@ -29,9 +51,10 @@ export function MainDocumentView({
+   // data-call-follow: the one place here that can be followed, in a call
+   // (the call package): what's open in it, and how it's being looked at, is
+   // what's shared, and following someone it's theirs that shows here, with
+@@ -33,9 +55,10 @@ export function MainDocumentView({
            <patchwork-view doc-url={selectedDocUrl()!} tool-id={toolId()} />
          )}
        </Show>

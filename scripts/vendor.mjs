@@ -11,8 +11,10 @@
 //   node scripts/vendor.mjs              build what has changed
 //   node scripts/vendor.mjs save <name>  write .vendor/<name>'s changes to
 //                                        vendor/<name>.patch, and build it
-//   node scripts/vendor.mjs update       move each package that follows a
-//                                        branch to its head, and build it
+//   node scripts/vendor.mjs update       move each package to its latest
+//                                        commit (pkg-base's latest release, or
+//                                        its branch's head), and build it
+//                                        (also: pnpm vendor:update)
 import {spawnSync} from "node:child_process"
 import {createHash} from "node:crypto"
 import {cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync} from "node:fs"
@@ -31,8 +33,8 @@ const packages = {
 	providers: "15a7363218ef6e302daa4f626eaf08856c99ec42",
 	// the call, and the threepane that mounts it (threepane there is 0.0.156's
 	// plus call-provider round the frame and the control panel in the sidebar)
-	call: {branch: "call-package", commit: "7c1b58394ecf0386bc202405b3fb20aaf2f463a5"},
-	threepane: {branch: "call-package", commit: "7c1b58394ecf0386bc202405b3fb20aaf2f463a5"},
+	call: {branch: "call-package", commit: "5e70401840869e4c7b1e183f1597c476627aa5ab"},
+	threepane: {branch: "call-package", commit: "5e70401840869e4c7b1e183f1597c476627aa5ab"},
 }
 const pin = name => (typeof packages[name] === "string" ? {commit: packages[name]} : packages[name])
 
@@ -126,6 +128,32 @@ if (command === "save") {
 } else if (command === "update") {
 	const script = fileURLToPath(import.meta.url)
 	let source = readFileSync(script, "utf8")
+	// a package on a release moves to the latest one, and so does knit's own
+	// dependency on pkg-base (the packages it doesn't vendor come from there)
+	const release = JSON.parse(
+		run("npm", ["view", "@inkandswitch/patchwork-pkg-base", "version", "gitHead", "--json"], root, {
+			stdio: ["ignore", "pipe", "inherit"],
+			encoding: "utf8",
+		}),
+	)
+	if (!release.gitHead) throw new Error(`pkg-base ${release.version} has no gitHead`)
+	source = source.replace(/\/\/ main: pkg-base [\d.]+/g, `// main: pkg-base ${release.version}`)
+	for (const name of Object.keys(packages)) {
+		const commit = packages[name]
+		if (typeof commit !== "string" || commit === release.gitHead) continue
+		console.log(`vendor: ${name} ${commit.slice(0, 7)} -> ${release.gitHead.slice(0, 7)} (pkg-base ${release.version})`)
+		const line = `${name}: "${commit}"`
+		if (!source.includes(line)) throw new Error(`couldn't find ${name}'s pin in ${script}`)
+		source = source.replace(line, `${name}: "${release.gitHead}"`)
+		packages[name] = release.gitHead
+	}
+	const manifest = join(root, "package.json")
+	const json = readFileSync(manifest, "utf8")
+	const bumped = json.replace(/("@inkandswitch\/patchwork-pkg-base": )"[^"]*"/, `$1"^${release.version}"`)
+	if (bumped !== json) {
+		writeFileSync(manifest, bumped)
+		run("pnpm", ["install"], root)
+	}
 	for (const name of Object.keys(packages)) {
 		const {branch, commit} = pin(name)
 		if (!branch) continue
