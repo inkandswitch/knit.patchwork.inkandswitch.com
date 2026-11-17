@@ -59,10 +59,10 @@ index 107b983..40d03cc 100644
  export function pageRepo() {
    return globalThis.repo ?? globalThis.patchwork?.repo ?? null;
 diff --git a/src/provider.js b/src/provider.js
-index 2a757ad..26e2d53 100644
+index 7547bc5..cbab55d 100644
 --- a/src/provider.js
 +++ b/src/provider.js
-@@ -7,7 +7,7 @@ import { render } from "solid-js/web";
+@@ -6,7 +6,7 @@ import { render } from "solid-js/web";
  import html from "solid-js/html";
  import { accept } from "@inkandswitch/patchwork-providers";
  import { ask, call, hangUp, hearRoom, holdVideoSpot } from "./engine/call.js";
@@ -71,7 +71,7 @@ index 2a757ad..26e2d53 100644
  import { CALL, CALL_EVENT, CALL_ROOM, CALL_VIDEO, roomState } from "./protocol.js";
  import { CallFloating, CallQuestion, CallStage } from "./ui/ui.js";
  import { stageArea } from "./ui/area.js";
-@@ -47,14 +47,26 @@ function holdChimes() {
+@@ -45,14 +45,26 @@ function holdChimes() {
  }
  
  export function CallProvider(element) {
@@ -100,7 +100,7 @@ index 2a757ad..26e2d53 100644
    }
  
    function onMounted(event) {
-@@ -65,7 +77,7 @@ export function CallProvider(element) {
+@@ -63,7 +75,7 @@ export function CallProvider(element) {
      const id = "url" in (event.detail ?? {}) ? roomUrl(event.detail.url) : null;
      const held = id && mounts.get(id);
      if (!held) return;
@@ -109,7 +109,7 @@ index 2a757ad..26e2d53 100644
      if (!held.length) mounts.delete(id);
    }
  
-@@ -123,7 +135,7 @@ export function CallProvider(element) {
+@@ -120,7 +132,7 @@ export function CallProvider(element) {
      element.removeEventListener("patchwork:unmounted", onUnmounted);
      element.removeEventListener("patchwork:subscribe", onSubscribe);
      element.removeEventListener(CALL_EVENT, onCall);
@@ -117,7 +117,7 @@ index 2a757ad..26e2d53 100644
 +    for (const held of mounts.values()) held.forEach(release);
      mounts.clear();
      unrender();
-     areas.stop();
+     stopChimes();
 diff --git a/test/button.test.js b/test/button.test.js
 index c19a7ae..aa778c2 100644
 --- a/test/button.test.js
