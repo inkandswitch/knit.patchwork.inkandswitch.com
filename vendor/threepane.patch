@@ -1,0 +1,147 @@
+diff --git a/src/components/MainDocumentView.test.tsx b/src/components/MainDocumentView.test.tsx
+new file mode 100644
+index 0000000..21a54ac
+--- /dev/null
++++ b/src/components/MainDocumentView.test.tsx
+@@ -0,0 +1,86 @@
++import { afterEach, beforeEach, describe, expect, it } from "vitest";
++import { createSignal } from "solid-js";
++import { render } from "solid-js/web";
++import type { AutomergeUrl } from "@automerge/automerge-repo/slim";
++import { MainDocumentView } from "./MainDocumentView";
++
++let host: HTMLElement;
++let dispose: () => void;
++const [docUrl, setDocUrl] = createSignal<AutomergeUrl | undefined>();
++
++function mount() {
++  dispose = render(
++    () => (
++      <MainDocumentView
++        viewKey={docUrl}
++        selectedDocUrl={docUrl}
++        toolId={() => undefined}
++      />
++    ),
++    host
++  );
++}
++
++const card = (text: string) => {
++  const element = document.createElement("div");
++  element.className = "site-card";
++  element.textContent = text;
++  return element;
++};
++
++beforeEach(() => {
++  setDocUrl(undefined);
++  host = document.body.appendChild(document.createElement("div"));
++});
++afterEach(() => {
++  dispose?.();
++  host.remove();
++  delete window.patchworkRoute;
++});
++
++describe("MainDocumentView with nothing open", () => {
++  it("asks you to pick a doc, when the site has nothing to say", () => {
++    mount();
++    expect(host.querySelector(".placeholder")?.textContent).toBe(
++      "Select a document in the sidebar"
++    );
++  });
++
++  it("shows the site's placeholder instead, when it has one", () => {
++    window.patchworkRoute = { placeholder: () => card("not in your sidebar") };
++    mount();
++    expect(host.querySelector(".placeholder")).toBeNull();
++    expect(host.querySelector(".site-card")?.textContent).toBe(
++      "not in your sidebar"
++    );
++  });
++
++  it("asks the site again when the route moves", () => {
++    let text: string | undefined;
++    window.patchworkRoute = { placeholder: () => (text ? card(text) : null) };
++    mount();
++    expect(host.querySelector(".placeholder")).not.toBeNull();
++    text = "looking";
++    window.dispatchEvent(new HashChangeEvent("hashchange"));
++    expect(host.querySelector(".site-card")?.textContent).toBe("looking");
++    text = "not in your sidebar";
++    window.dispatchEvent(new HashChangeEvent("hashchange"));
++    expect(host.querySelectorAll(".site-card")).toHaveLength(1);
++    expect(host.querySelector(".site-card")?.textContent).toBe(
++      "not in your sidebar"
++    );
++    text = undefined;
++    window.dispatchEvent(new HashChangeEvent("hashchange"));
++    expect(host.querySelector(".site-card")).toBeNull();
++    expect(host.querySelector(".placeholder")).not.toBeNull();
++  });
++
++  it("shows neither once a doc is open", () => {
++    window.patchworkRoute = { placeholder: () => card("not in your sidebar") };
++    mount();
++    setDocUrl("automerge:2hYBuGqvRixHMWj7Wt4yRrqJNq3u" as AutomergeUrl);
++    expect(host.querySelector(".site-card")).toBeNull();
++    expect(host.querySelector(".placeholder")).toBeNull();
++    expect(host.querySelector("patchwork-view")).not.toBeNull();
++  });
++});
+diff --git a/src/components/MainDocumentView.tsx b/src/components/MainDocumentView.tsx
+index a8c4b2a..2094344 100644
+--- a/src/components/MainDocumentView.tsx
++++ b/src/components/MainDocumentView.tsx
+@@ -1,6 +1,18 @@
+ import type { AutomergeUrl } from "@automerge/automerge-repo/slim";
+ import type { Accessor } from "solid-js";
+-import { Show } from "solid-js";
++import { createSignal, onCleanup, Show } from "solid-js";
++
++// A site that says where it is some other way than the hash (by path, say)
++// puts `window.patchworkRoute` there, as patchwork's router reads it too. Its
++// `placeholder()`, if it has one, is what shows while no doc is open, in place
++// of "Select a document in the sidebar": a path that names a doc that isn't
++// here, say. It still announces a move with a hashchange.
++// (knit.patchwork.inkandswitch.com's src/route.ts)
++declare global {
++  interface Window {
++    patchworkRoute?: { placeholder?(): Node | null | undefined };
++  }
++}
+ 
+ interface MainDocumentViewProps {
+   viewKey: Accessor<string | undefined>;
+@@ -22,6 +34,16 @@ export function MainDocumentView({
+   toolId,
+   ref,
+ }: MainDocumentViewProps) {
++  // the site's placeholder is asked for again whenever the route moves
++  const [moved, setMoved] = createSignal(0, { equals: false });
++  const onMove = () => setMoved(0);
++  window.addEventListener("hashchange", onMove);
++  onCleanup(() => window.removeEventListener("hashchange", onMove));
++  const sitePlaceholder = () => {
++    moved();
++    return window.patchworkRoute?.placeholder?.() ?? undefined;
++  };
++
+   return (
+     <div class="document-view" ref={ref}>
+       <Show when={viewKey()} keyed>
+@@ -29,9 +51,10 @@ export function MainDocumentView({
+           <patchwork-view doc-url={selectedDocUrl()!} tool-id={toolId()} />
+         )}
+       </Show>
+-      {!selectedDocUrl() && (
+-        <div class="placeholder">Select a document in the sidebar</div>
+-      )}
++      {!selectedDocUrl() &&
++        (sitePlaceholder() ?? (
++          <div class="placeholder">Select a document in the sidebar</div>
++        ))}
+     </div>
+   );
+ }

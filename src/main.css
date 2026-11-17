@@ -2,3 +2,97 @@
 .frame-shell > .frame-warning-banner {
 	display: none;
 }
+
+/* a card where the doc would be (missing.ts), drawn as patchwork's own are
+   (patchwork-elements' cards.js) */
+.knit-card {
+	--knit-card-ink: var(--studio-line, #1c1a17);
+	--knit-card-muted: var(--studio-line-offset-50, color-mix(in oklab, var(--knit-card-ink) 55%, transparent));
+	--knit-card-line: var(--studio-chrome-line, var(--knit-card-ink));
+	--knit-card-sheet: var(--editor-fill, var(--text-editor-fill, var(--studio-fill, #fffdf5)));
+
+	display: grid;
+	box-sizing: border-box;
+	place-items: center;
+	width: 100%;
+	height: 100%;
+	min-height: 8em;
+	overflow: auto;
+	padding: 16px;
+	color: var(--knit-card-ink);
+	font: 14px/1.45 var(--studio-family-ui, var(--studio-family, system-ui, sans-serif));
+	/* a path that's only slow to find shouldn't flash a card on its way in */
+	animation: knit-card-in var(--studio-duration-slow, 0.3s) ease 0.4s both;
+}
+@keyframes knit-card-in {
+	from {
+		opacity: 0;
+	}
+}
+.knit-card__defs {
+	position: absolute;
+	width: 0;
+	height: 0;
+}
+.knit-card__sheet {
+	box-sizing: border-box;
+	max-width: 440px;
+	padding: 24px 28px 20px;
+	border: 1px solid var(--knit-card-line);
+	border-radius: 0.5em;
+	background: var(--knit-card-sheet);
+	box-shadow: 0 0 10px 2px #66003322;
+	text-align: center;
+}
+.knit-card__sheet p {
+	margin: 0 0 12px;
+	color: var(--knit-card-muted);
+}
+.knit-card__sheet p:last-child {
+	margin-bottom: 0;
+}
+.knit-card__rough {
+	margin: 0 0 6px;
+	font: 400 28px/1.1 "Fraunces", "Iowan Old Style", Palatino, Georgia, serif;
+	filter: url(#knit-card-rough);
+}
+.knit-card__menu-item {
+	color: var(--knit-card-ink);
+	font-weight: 600;
+	white-space: nowrap;
+}
+.knit-card--finding {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 8px;
+	color: var(--knit-card-muted);
+	font-size: 0.9em;
+	animation-delay: 1.5s;
+}
+.knit-card__dot {
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	background: currentColor;
+	animation: knit-card-pulse 2s ease-in-out infinite;
+}
+@keyframes knit-card-pulse {
+	0%,
+	100% {
+		opacity: 0.25;
+		transform: scale(0.6);
+	}
+	50% {
+		opacity: 1;
+		transform: scale(1);
+	}
+}
+@media (prefers-reduced-motion: reduce) {
+	.knit-card {
+		animation-duration: 0.01s;
+	}
+	.knit-card__dot {
+		animation: none;
+	}
+}

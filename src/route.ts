@@ -7,11 +7,17 @@
 // which is yours): the path opens your project on those files. Any other doc,
 // or another frame, keeps patchwork's /#doc=automerge:….
 //
+// A /docs/ path is only yours: one that names nothing in your sidebar stays
+// in the address, and where the doc would be is a card that says so, and that
+// a doc's given with a share link (threepane asks `placeholder()`,
+// vendor/threepane.patch; missing.ts).
+//
 // Moving changes the address with pushState, then tells everything that
 // follows the hash (the router, the selected-doc provider, drafts) with a
 // hashchange, as a change of hash would.
 
-import {docPath, parsePath, shortIdOf} from "./paths.ts"
+import {lookingCard, missingCard} from "./missing.ts"
+import {docPath, isDocsPath, parsePath, shortIdOf} from "./paths.ts"
 import {sharedUrl, type Entry, type Sidebar} from "./sidebar.ts"
 
 declare global {
@@ -25,6 +31,8 @@ export type PatchworkRoute = {
 	params(): URLSearchParams
 	/** Go to `params`, a step Back can return from. */
 	go(params: URLSearchParams): void
+	/** What shows while no doc's open, if not threepane's own. */
+	placeholder(): Node | null
 }
 
 // short id → url (of the doc that opens), for every doc the path has named: so a reload opens the doc
@@ -127,14 +135,30 @@ export function installRoute() {
 		announce()
 	}
 
+	// a /docs/ path that names no doc you've got (yet: the sidebar may not be
+	// all in)
+	const lost = () => isDocsPath(location.pathname) && !params().get("doc")
+
+	// while it's lost, a card where the doc would be: one at a time, so
+	// asking again doesn't draw it again
+	let card: {short: string | null; looking: boolean; element: Node} | null = null
+	function placeholder() {
+		if (!lost()) return null
+		const short = parsePath(location.pathname)
+		// a path that can't name a doc needn't wait for the sidebar
+		const looking = !!short && !sidebar?.ready()
+		if (card?.short !== short || card.looking !== looking) {
+			card = {short, looking, element: looking ? lookingCard() : missingCard()}
+		}
+		return card.element
+	}
+
 	// the address put right for what's open, without a step: a doc that's
 	// come into the sidebar (or been renamed in it) gets its path, and one
-	// that's left it gets its hash back. a path no one knows, once the
-	// sidebar's all in, goes
+	// that's left it gets its hash back. a path no one knows stays, for its
+	// card
 	function tidy() {
-		const short = parsePath(location.pathname)
-		const unknown = short && !hashParams().get("doc") && !pathUrl(short)
-		if (unknown && !sidebar?.ready()) return
+		if (lost()) return
 		const address = pathOf(addressOf(params()))
 		if (address === here()) return
 		try {
@@ -150,7 +174,7 @@ export function installRoute() {
 	// been heard, the address is put right
 	addEventListener("hashchange", () => setTimeout(tidy, 0))
 
-	window.patchworkRoute = {params, go}
+	window.patchworkRoute = {params, go, placeholder}
 
 	return {
 		start(found: Sidebar) {
@@ -164,12 +188,12 @@ export function installRoute() {
 					if (!byShort.has(short)) byShort.set(short, entry)
 					byUrl.set(entry.url, entry)
 				}
-				// a path that wasn't known at boot, found: it opens
-				if (waiting && params().get("doc")) {
+				// a path that wasn't known at boot, found: it opens. or not
+				// found, with the sidebar all in: its card says it isn't there
+				if (waiting && (params().get("doc") || found.ready())) {
 					waiting = false
 					announce()
 				}
-				if (found.ready()) waiting = false
 				tidy()
 			}
 			found.subscribe(read)

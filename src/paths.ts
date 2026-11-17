@@ -30,6 +30,10 @@ export function slugOf(name: unknown) {
 export const docPath = ({url, name}: {url: string; name?: string}) =>
 	`${DOCS_PATH}${slugOf(name)}-${shortIdOf(url)}`
 
+/** Whether a path is a doc's, /docs/…, whether or not it names one well. */
+export const isDocsPath = (pathname: string | null | undefined) =>
+	/^\/docs(\/|$)/.test(String(pathname ?? ""))
+
 /** The short id a path asks for, or null for any other path. */
 export function parsePath(pathname: string | null | undefined): string | null {
 	const path = String(pathname ?? "").replace(/\/+$/, "")
