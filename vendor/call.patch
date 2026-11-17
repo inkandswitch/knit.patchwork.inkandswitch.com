@@ -59,7 +59,7 @@ index 107b983..40d03cc 100644
  export function pageRepo() {
    return globalThis.repo ?? globalThis.patchwork?.repo ?? null;
 diff --git a/src/provider.js b/src/provider.js
-index 7547bc5..cbab55d 100644
+index 6f3dd76..9622227 100644
 --- a/src/provider.js
 +++ b/src/provider.js
 @@ -6,7 +6,7 @@ import { render } from "solid-js/web";
@@ -68,7 +68,7 @@ index 7547bc5..cbab55d 100644
  import { ask, call, hangUp, hearRoom, holdVideoSpot } from "./engine/call.js";
 -import { roomUrl } from "./engine/room.js";
 +import { roomUrl, sharedRoom } from "./engine/room.js";
- import { CALL, CALL_EVENT, CALL_ROOM, CALL_VIDEO, roomState } from "./protocol.js";
+ import { CALL, CALL_EVENT, CALL_NOW, CALL_ROOM, CALL_VIDEO, roomState } from "./protocol.js";
  import { CallFloating, CallQuestion, CallStage } from "./ui/ui.js";
  import { stageArea } from "./ui/area.js";
 @@ -45,14 +45,26 @@ function holdChimes() {
@@ -109,7 +109,7 @@ index 7547bc5..cbab55d 100644
      if (!held.length) mounts.delete(id);
    }
  
-@@ -120,7 +132,7 @@ export function CallProvider(element) {
+@@ -123,7 +135,7 @@ export function CallProvider(element) {
      element.removeEventListener("patchwork:unmounted", onUnmounted);
      element.removeEventListener("patchwork:subscribe", onSubscribe);
      element.removeEventListener(CALL_EVENT, onCall);
@@ -156,7 +156,7 @@ index c19a7ae..aa778c2 100644
 +  expect(sent[0]).toMatchObject({ action: "ask", url: files });
 +});
 diff --git a/test/provider.test.js b/test/provider.test.js
-index 2ae8a25..f58eef7 100644
+index 4cc05a3..d842393 100644
 --- a/test/provider.test.js
 +++ b/test/provider.test.js
 @@ -109,6 +109,31 @@ describe("arriving late", () => {
