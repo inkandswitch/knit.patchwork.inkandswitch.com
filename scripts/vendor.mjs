@@ -31,8 +31,8 @@ const packages = {
 	providers: "15a7363218ef6e302daa4f626eaf08856c99ec42",
 	// the call, and the threepane that mounts it (threepane there is 0.0.156's
 	// plus call-provider round the frame and the control panel in the sidebar)
-	call: {branch: "call-package", commit: "7315e90458a46a702e5d992a80e73095a94c1096"},
-	threepane: {branch: "call-package", commit: "7315e90458a46a702e5d992a80e73095a94c1096"},
+	call: {branch: "call-package", commit: "7c1b58394ecf0386bc202405b3fb20aaf2f463a5"},
+	threepane: {branch: "call-package", commit: "7c1b58394ecf0386bc202405b3fb20aaf2f463a5"},
 }
 const pin = name => (typeof packages[name] === "string" ? {commit: packages[name]} : packages[name])
 
