@@ -23,16 +23,16 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "..")
 const repo = "inkandswitch/patchwork-pkg-base"
 
 const packages = {
-	// main: 3e64811 (pkg-base 0.0.156 + an unreleased codemirror-markdown fix)
-	sideboard: "3e648114816e07439b756c11bdf5351ce48d82aa",
-	// main: 3e64811 (pkg-base 0.0.156 + an unreleased codemirror-markdown fix)
-	packages: "3e648114816e07439b756c11bdf5351ce48d82aa",
-	// main: 3e64811 (pkg-base 0.0.156 + an unreleased codemirror-markdown fix)
-	providers: "3e648114816e07439b756c11bdf5351ce48d82aa",
-	// the call, and the threepane that mounts it (threepane there is 0.0.156's
-	// plus call-provider round the frame and the control panel in the sidebar)
-	call: {branch: "call-package", commit: "d6e6c098bf11c276c42e24ed20516a5b56e2e956"},
-	threepane: {branch: "call-package", commit: "d6e6c098bf11c276c42e24ed20516a5b56e2e956"},
+	// main: 0c6bd27 (pkg-base 0.0.162)
+	sideboard: "0c6bd277f416fd9b5696b109ec7be8b1a271013b",
+	// main: 0c6bd27 (pkg-base 0.0.162)
+	packages: "0c6bd277f416fd9b5696b109ec7be8b1a271013b",
+	// main: 0c6bd27 (pkg-base 0.0.162)
+	providers: "0c6bd277f416fd9b5696b109ec7be8b1a271013b",
+	// main: 0c6bd27 (pkg-base 0.0.162), which has the call merged in (#100), and
+	// the threepane that mounts it
+	call: "0c6bd277f416fd9b5696b109ec7be8b1a271013b",
+	threepane: "0c6bd277f416fd9b5696b109ec7be8b1a271013b",
 }
 const pin = name => (typeof packages[name] === "string" ? {commit: packages[name]} : packages[name])
 

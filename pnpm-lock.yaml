@@ -8,7 +8,7 @@ overrides:
   '@automerge/automerge': 3.5.0
 
 patchedDependencies:
-  '@inkandswitch/patchwork': 287c30603c6c247bfcf322a309a51b4ac83d4ab9afd7897c3788a633e73f3ad0
+  '@inkandswitch/patchwork': 34dc7dd9d3fb31aa8df00a604b6dec8976904b21e837a9ccfe3174e59154632f
 
 importers:
 
@@ -16,10 +16,10 @@ importers:
     dependencies:
       '@inkandswitch/patchwork':
         specifier: ^0.10.1
-        version: 0.10.1(patch_hash=287c30603c6c247bfcf322a309a51b4ac83d4ab9afd7897c3788a633e73f3ad0)(@types/node@20.19.43)(solid-js@1.9.19)(vite@8.3.8(@types/node@20.19.43)(esbuild@0.28.2))(ws@8.23.0)
+        version: 0.10.1(patch_hash=34dc7dd9d3fb31aa8df00a604b6dec8976904b21e837a9ccfe3174e59154632f)(@types/node@20.19.43)(solid-js@1.9.19)(vite@8.3.8(@types/node@20.19.43)(esbuild@0.28.2))(ws@8.23.0)
       '@inkandswitch/patchwork-pkg-base':
-        specifier: ^0.0.156
-        version: 0.0.156
+        specifier: ^0.0.162
+        version: 0.0.162
     devDependencies:
       '@inkandswitch/patchwork-e2e':
         specifier: ^0.2.4
@@ -702,8 +702,8 @@ packages:
       '@automerge/automerge': 3.5.0
       '@automerge/automerge-repo': '*'
 
-  '@inkandswitch/patchwork-pkg-base@0.0.156':
-    resolution: {integrity: sha512-uYn8UmPut5hjI5vl1/Y7SKlnN8suP5u4uN25Z+OwLaBjSIE8KXCuWEgIIF5FzDhhqXfYkL98N8uy3LBsc/GqHA==}
+  '@inkandswitch/patchwork-pkg-base@0.0.162':
+    resolution: {integrity: sha512-iyR9oYTAz/mu+vgzOHYj7loPghXPWDWz9f8PS+g6C5z08g8jSUEHisFME/gxW032Gu0HDIX+Rm/Lrx42mgXnRQ==}
 
   '@inkandswitch/patchwork-plugins@1.2.7':
     resolution: {integrity: sha512-i5mOHa/P296lOw381aEc1lzqr/0aXfdSokH7B1UyoFvBtrJIr5txP0Ttd90/4sIFzeIcV1rABeIW7BoN4InckQ==}
@@ -1766,7 +1766,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@inkandswitch/patchwork-pkg-base@0.0.156': {}
+  '@inkandswitch/patchwork-pkg-base@0.0.162': {}
 
   '@inkandswitch/patchwork-plugins@1.2.7(@automerge/automerge-repo@2.6.0-subduction.49)(@automerge/automerge@3.5.0)(@inkandswitch/patchwork-filesystem@0.2.19(@automerge/automerge-repo@2.6.0-subduction.49)(@automerge/automerge@3.5.0))':
     dependencies:
@@ -1785,7 +1785,7 @@ snapshots:
     dependencies:
       '@automerge/automerge-repo': 2.6.0-subduction.49
 
-  '@inkandswitch/patchwork@0.10.1(patch_hash=287c30603c6c247bfcf322a309a51b4ac83d4ab9afd7897c3788a633e73f3ad0)(@types/node@20.19.43)(solid-js@1.9.19)(vite@8.3.8(@types/node@20.19.43)(esbuild@0.28.2))(ws@8.23.0)':
+  '@inkandswitch/patchwork@0.10.1(patch_hash=34dc7dd9d3fb31aa8df00a604b6dec8976904b21e837a9ccfe3174e59154632f)(@types/node@20.19.43)(solid-js@1.9.19)(vite@8.3.8(@types/node@20.19.43)(esbuild@0.28.2))(ws@8.23.0)':
     dependencies:
       '@ark-0.6/automerge-repo': '@automerge/automerge-repo@2.6.0-subduction.48'
       '@ark-0.6/automerge-repo-keyhive': '@automerge/automerge-repo-keyhive@0.6.0-alpha.1(ws@8.23.0)'
