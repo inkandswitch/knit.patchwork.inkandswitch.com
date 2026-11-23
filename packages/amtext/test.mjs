@@ -5,7 +5,7 @@ import { writeFileSync, mkdtempSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { parse, stringify, Counter, Cursor, ImmutableString, Link } from "./amtext.js";
-import { patchworkFolder, zip, unzip, ROOT } from "./patchworkfolder.js";
+import { patchworkFolder, zip, unzip, isFolderShaped, ROOT } from "./patchworkfolder.js";
 
 // ---- parser on the example from the request
 const example = `{
@@ -244,6 +244,18 @@ writeFileSync(join(work, "__MACOSX", "._root.amtext"), "junk");
 execFileSync("zip", ["-qr", "../re.zip", "Folder", "__MACOSX"], { cwd: work });
 const re = await pf2.importFolder(new Uint8Array(readFileSync(join(dir, "re.zip"))));
 assert.equal(get(re.root).title, "My / Folder");
+
+// ---- the same, unzipped: a directory's files
+assert.ok(isFolderShaped([...entries.keys()]));
+assert.ok(isFolderShaped([...[...entries.keys()].map(n => `Folder/${n}`), ".DS_Store", "Folder/._root.amtext"]), "inside one dir, with junk");
+assert.ok(!isFolderShaped([...entries.keys()].filter(n => n !== ROOT)), "needs a root.amtext");
+assert.ok(!isFolderShaped([...entries.keys(), "notes.txt"]), "nothing but .amtext");
+assert.ok(!isFolderShaped(["a/root.amtext", "b/x.amtext"]), "root.amtext not at the top");
+assert.ok(!isFolderShaped([]));
+const fromDir = await pf2.importDirectory([...entries].map(([n, b]) => [n, new Blob([b])]));
+assert.equal(get(fromDir.root).title, "My / Folder");
+assert.equal(fromDir.urls.size, 5);
+await assert.rejects(pf2.importDirectory([["root.amtext", new Blob(["{}"])], ["x.png", new Blob([])]]), /not a \.patchworkfolder/);
 
 // ---- single doc text
 const t = await pf1.exportDocText(essay.url);

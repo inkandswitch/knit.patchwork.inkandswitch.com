@@ -22,6 +22,9 @@
  * settings aren't readable from a doc, so imported marks get updateSpans'
  * default ("both") unless you pass { defaultExpand, perMarkExpand }.
  *
+ * An unzipped one, a directory of the same files, can be imported too (see
+ * isFolderShaped).
+ *
  * No history is kept: import makes fresh docs.
  */
 
@@ -264,6 +267,32 @@ function resolvePath(fromFile, rel) {
     else parts.push(seg);
   }
   return parts.join("/");
+}
+
+// the .amtext files among an archive's paths, and the directory they're all
+// in, if they're all in one (as when it's zipped from outside a folder)
+function layout(names) {
+  const paths = names.filter(p => {
+    const base = p.split("/").pop();
+    return base.endsWith(".amtext") && !base.startsWith("._") && !p.startsWith("__MACOSX/");
+  });
+  const tops = new Set(paths.map(p => (p.includes("/") ? p.split("/")[0] : "")));
+  const prefix = tops.size === 1 && !tops.has("") ? `${[...tops][0]}/` : "";
+  return { paths, prefix };
+}
+
+// what an operating system leaves in a folder: .DS_Store, ._ files, __MACOSX
+const JUNK = new Set(["Thumbs.db", "desktop.ini"]);
+const isJunk = p => p.startsWith("__MACOSX/") || p.split("/").some(s => s.startsWith(".") || JUNK.has(s));
+
+/**
+ * whether a directory holding files at `paths` (relative to it) has the shape
+ * of a .patchworkfolder: a root.amtext and nothing else but .amtext files,
+ * maybe all in one directory, as an unzipped one is
+ */
+export function isFolderShaped(paths) {
+  const { paths: amtext, prefix } = layout(paths);
+  return amtext.includes(prefix + ROOT) && paths.every(p => amtext.includes(p) || isJunk(p));
 }
 
 // ---------------------------------------------------------------- patchwork
@@ -531,27 +560,39 @@ export function patchworkFolder(env = {}) {
 
   /** input: File | Blob | ArrayBuffer | Uint8Array. returns { root, urls: Map<path, url> } */
   async function importFolder(input) {
-    const { Automerge: A } = ctx();
     const bytes =
       input instanceof Uint8Array ? input
       : input instanceof ArrayBuffer ? new Uint8Array(input)
       : new Uint8Array(await input.arrayBuffer());
-    const entries = await unzip(bytes);
+    return unpack(await unzip(bytes));
+  }
 
-    const paths = [...entries.keys()].filter(p => {
-      const base = p.split("/").pop();
-      return base.endsWith(".amtext") && !base.startsWith("._") && !p.startsWith("__MACOSX/");
-    });
+  /**
+   * a .patchworkfolder that's been unzipped, or made by hand: a directory's
+   * files as [path inside it, File | Blob | Uint8Array] pairs. it must be
+   * isFolderShaped. returns { root, urls: Map<path, url> }
+   */
+  async function importDirectory(files) {
+    const entries = new Map(files);
+    if (!isFolderShaped([...entries.keys()])) {
+      throw new Error(`not a ${EXT}: it needs a ${ROOT}, and nothing but .amtext files`);
+    }
+    return unpack(entries);
+  }
+
+  /** entries: Map<path, Uint8Array | Blob>, an archive's files */
+  async function unpack(entries) {
+    const { Automerge: A } = ctx();
+    const { paths, prefix } = layout([...entries.keys()]);
     if (!paths.length) throw new Error("no .amtext files in archive");
-    // tolerate everything being inside one top-level directory
-    const tops = new Set(paths.map(p => (p.includes("/") ? p.split("/")[0] : "")));
-    const prefix = tops.size === 1 && !tops.has("") ? `${[...tops][0]}/` : "";
 
     const utf8 = new TextDecoder("utf-8", { fatal: true });
     const files = new Map();
     for (const p of paths) {
       const rel = p.slice(prefix.length);
-      try { files.set(rel, parse(utf8.decode(entries.get(p)))); }
+      const v = entries.get(p);
+      const bytes = v instanceof Uint8Array ? v : new Uint8Array(await v.arrayBuffer());
+      try { files.set(rel, parse(utf8.decode(bytes))); }
       catch (e) { e.message = `${rel}: ${e.message}`; throw e; }
     }
 
@@ -650,5 +691,5 @@ export function patchworkFolder(env = {}) {
     return handle.url;
   }
 
-  return { exportFolder, downloadFolder, importFolder, pickAndImport, dropToImport, exportDocText, importDocText };
+  return { exportFolder, downloadFolder, importFolder, importDirectory, pickAndImport, dropToImport, exportDocText, importDocText };
 }

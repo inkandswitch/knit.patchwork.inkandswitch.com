@@ -5,7 +5,8 @@
  *   completions) in patchwork's file editor
  * - a "patchwork:archive" plugin packs a doc and every doc it links to into a
  *   .patchworkfolder, and unpacks one into fresh docs. The sideboard uses it
- *   to download folders and to take .patchworkfolder files dropped on it.
+ *   to download folders and to take .patchworkfolder files dropped on it,
+ *   and directories dropped on it that are one unzipped.
  * - another unpacks a .latticeproject (lattice's download of a project, the
  *   same zip) into a lattice project, as lattice does. It's only for taking
  *   them: a folder isn't a lattice project, so there's no downloading one as
@@ -58,6 +59,8 @@ export const plugins = [
     id: "patchworkfolder",
     name: "Patchwork folder",
     extension: ".patchworkfolder",
+    // a directory dropped from the computer with its shape is taken as one
+    directories: true,
     async load() {
       const { archive } = await import("./archive.js");
       return archive;

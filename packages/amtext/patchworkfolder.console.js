@@ -609,6 +609,21 @@ ${pad(depth)}}`;
     }
     return parts.join("/");
   }
+  function layout(names) {
+    const paths = names.filter((p) => {
+      const base = p.split("/").pop();
+      return base.endsWith(".amtext") && !base.startsWith("._") && !p.startsWith("__MACOSX/");
+    });
+    const tops = new Set(paths.map((p) => p.includes("/") ? p.split("/")[0] : ""));
+    const prefix = tops.size === 1 && !tops.has("") ? `${[...tops][0]}/` : "";
+    return { paths, prefix };
+  }
+  var JUNK = /* @__PURE__ */ new Set(["Thumbs.db", "desktop.ini"]);
+  var isJunk = (p) => p.startsWith("__MACOSX/") || p.split("/").some((s) => s.startsWith(".") || JUNK.has(s));
+  function isFolderShaped(paths) {
+    const { paths: amtext, prefix } = layout(paths);
+    return amtext.includes(prefix + ROOT) && paths.every((p) => amtext.includes(p) || isJunk(p));
+  }
   function patchworkFolder(env = {}) {
     const ctx = () => {
       const g = globalThis;
@@ -725,7 +740,7 @@ ${pad(depth)}}`;
       const bytes = await zip(files);
       const title = docs.get(root).title;
       const base = typeof title === "string" && title.replace(/[\\/:*?"<>|\x00-\x1f]+/g, "-").trim().slice(0, 80) || root.slice("automerge:".length);
-      return { bytes, filename: base + EXT, count: docs.size, failed };
+      return { bytes, filename: base + (env.extension ?? EXT), count: docs.size, failed };
     }
     async function downloadFolder(rootUrl) {
       const { bytes, filename, count, failed } = await exportFolder(rootUrl);
@@ -843,22 +858,28 @@ ${pad(depth)}}`;
       }
     }
     async function importFolder(input) {
-      const { Automerge: A } = ctx();
       const bytes = input instanceof Uint8Array ? input : input instanceof ArrayBuffer ? new Uint8Array(input) : new Uint8Array(await input.arrayBuffer());
-      const entries = await unzip(bytes);
-      const paths = [...entries.keys()].filter((p) => {
-        const base = p.split("/").pop();
-        return base.endsWith(".amtext") && !base.startsWith("._") && !p.startsWith("__MACOSX/");
-      });
+      return unpack(await unzip(bytes));
+    }
+    async function importDirectory(files) {
+      const entries = new Map(files);
+      if (!isFolderShaped([...entries.keys()])) {
+        throw new Error(`not a ${EXT}: it needs a ${ROOT}, and nothing but .amtext files`);
+      }
+      return unpack(entries);
+    }
+    async function unpack(entries) {
+      const { Automerge: A } = ctx();
+      const { paths, prefix } = layout([...entries.keys()]);
       if (!paths.length) throw new Error("no .amtext files in archive");
-      const tops = new Set(paths.map((p) => p.includes("/") ? p.split("/")[0] : ""));
-      const prefix = tops.size === 1 && !tops.has("") ? `${[...tops][0]}/` : "";
       const utf8 = new TextDecoder("utf-8", { fatal: true });
       const files = /* @__PURE__ */ new Map();
       for (const p of paths) {
         const rel = p.slice(prefix.length);
+        const v = entries.get(p);
+        const bytes = v instanceof Uint8Array ? v : new Uint8Array(await v.arrayBuffer());
         try {
-          files.set(rel, parse(utf8.decode(entries.get(p))));
+          files.set(rel, parse(utf8.decode(bytes)));
         } catch (e) {
           e.message = `${rel}: ${e.message}`;
           throw e;
@@ -907,7 +928,7 @@ ${pad(depth)}}`;
       return new Promise((resolve, reject) => {
         const input = document.createElement("input");
         input.type = "file";
-        input.accept = `${EXT},.zip,.amtext`;
+        input.accept = [.../* @__PURE__ */ new Set([env.extension ?? EXT, EXT, ".zip", ".amtext"])].join(",");
         input.onchange = () => {
           const f = input.files?.[0];
           if (!f) return reject(new Error("no file chosen"));
@@ -948,7 +969,7 @@ ${pad(depth)}}`;
       fill(handle, materialize(v, A, () => void 0), typed, A);
       return handle.url;
     }
-    return { exportFolder, downloadFolder, importFolder, pickAndImport, dropToImport, exportDocText, importDocText };
+    return { exportFolder, downloadFolder, importFolder, importDirectory, pickAndImport, dropToImport, exportDocText, importDocText };
   }
 
   // console-entry.js

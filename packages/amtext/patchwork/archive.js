@@ -28,6 +28,15 @@ export const archive = {
     const { root } = await folder(repo).importFolder(file);
     return root;
   },
+  /**
+   * unpacks a directory from the computer that's a .patchworkfolder unzipped
+   * (files: [path inside it, File] pairs), resolving with the root doc's url.
+   * rejects if it isn't one
+   */
+  async importDirectory(repo, files) {
+    const { root } = await folder(repo).importDirectory(files);
+    return root;
+  },
 };
 
 /** one doc's .amtext, from a link to it: made into a fresh doc */
