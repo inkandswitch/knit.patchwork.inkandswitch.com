@@ -353,7 +353,7 @@ index 523ee9d..c2740ba 100644
    const sameView = isSameDragOriginView(ctx.element);
    const copy = copyMode();
 diff --git a/src/sideboard/dnd/drop.test.ts b/src/sideboard/dnd/drop.test.ts
-index eee9b5d..6fbff54 100644
+index eee9b5d..309d18f 100644
 --- a/src/sideboard/dnd/drop.test.ts
 +++ b/src/sideboard/dnd/drop.test.ts
 @@ -1,4 +1,4 @@
@@ -437,7 +437,7 @@ index eee9b5d..6fbff54 100644
  describe("handleFilesDrop", () => {
    it("puts several files at the spot, in the order they were dropped", async () => {
      const f = folder("a", "b", "c");
-@@ -163,6 +213,92 @@ describe("handleFilesDrop", () => {
+@@ -163,6 +213,118 @@ describe("handleFilesDrop", () => {
        "application/octet-stream",
      ]);
    });
@@ -464,6 +464,9 @@ index eee9b5d..6fbff54 100644
 +            // unpacks into a folder named for what's in the file, or the
 +            // paths in the directory, if it has a root.pack
 +            load: async () => ({
++              fitsDirectory: (paths: string[]) =>
++                paths.includes("root.pack") &&
++                paths.every((path) => path.endsWith(".pack")),
 +              importDirectory: async (_repo: Repo, files: [string, Blob][]) => {
 +                const paths = files.map(([path]) => path).sort();
 +                if (!paths.includes("root.pack")) throw new Error("not a pack");
@@ -501,6 +504,29 @@ index eee9b5d..6fbff54 100644
 +      expect(failed).toEqual([]);
 +      expect(names(f)).toEqual(["a", "1", "root.pack sub/y.pack x.pack"]);
 +      expect(f.doc()!.docs.map((doc) => doc.type)).toEqual(["x", "file", "folder"]);
++    });
++
++    it("unpacks files dropped together that have the archive's shape", async () => {
++      const f = folder("a");
++      const { failed } = await handleFilesDrop(
++        [new File([""], "x.pack"), new File([""], "root.pack")],
++        f,
++        repo,
++        1
++      );
++      expect(failed).toEqual([]);
++      expect(names(f)).toEqual(["a", "root.pack x.pack"]);
++    });
++
++    it("adds files dropped together that don't have its shape one by one", async () => {
++      const f = folder("a");
++      await handleFilesDrop(
++        [new File(["n"], "notes.txt"), new File(["Unpacked"], "root.pack")],
++        f,
++        repo,
++        1
++      );
++      expect(names(f)).toEqual(["a", "notes.txt", "Unpacked"]);
 +    });
 +
 +    it("says it couldn't add a directory that isn't of the shape", async () => {
@@ -595,7 +621,7 @@ index 3462988..0066c0f 100644
      <>
        <For each={docs()}>
 diff --git a/src/sideboard/document-list/file-drop.ts b/src/sideboard/document-list/file-drop.ts
-index c961a2d..a3d802f 100644
+index c961a2d..efaa98c 100644
 --- a/src/sideboard/document-list/file-drop.ts
 +++ b/src/sideboard/document-list/file-drop.ts
 @@ -1,11 +1,18 @@
@@ -617,7 +643,7 @@ index c961a2d..a3d802f 100644
  
  // text the browser doesn't know is text: .amtext and .knitout come in as
  // application/octet-stream (or nothing at all)
-@@ -61,68 +68,208 @@ const isTextMimeType = (mimeType: string) => {
+@@ -61,68 +68,242 @@ const isTextMimeType = (mimeType: string) => {
  };
  
  /**
@@ -684,6 +710,14 @@ index c961a2d..a3d802f 100644
 +  return nested.flat();
 +}
 +
++/** The archive format that takes directories, loaded, if there is one. */
++async function directoryImporter() {
++  const archive = directoryArchive();
++  if (!archive) return undefined;
++  const module = await loadArchive(archive.id);
++  return module.importDirectory ? { archive, module } : undefined;
++}
++
 +/**
 + * Turn a directory from the operating system into a document, if it has the
 + * shape of an archive (an unzipped .patchworkfolder): it's unpacked and gives
@@ -693,14 +727,32 @@ index c961a2d..a3d802f 100644
 +  dir: FileSystemDirectoryEntry,
 +  repo: Repo
 +): Promise<DocLink> {
-+  const archive = directoryArchive();
-+  if (!archive) throw new Error(`nothing takes a directory like ${dir.name}`);
-+  const module = await loadArchive(archive.id);
-+  if (!module.importDirectory) {
-+    throw new Error(`${archive.extension} can't take a directory`);
-+  }
-+  const url = await module.importDirectory(repo, await filesIn(dir));
++  const importer = await directoryImporter();
++  if (!importer) throw new Error(`nothing takes a directory like ${dir.name}`);
++  const url = await importer.module.importDirectory!(repo, await filesIn(dir));
 +  log("FileDrop: Unpacked directory:", dir.name, url);
++  return docLinkFromUrl(repo, url);
++}
++
++/**
++ * Several files from the operating system that together make an archive (all
++ * of an unzipped .patchworkfolder's, say), unpacked into the doc they were
++ * made from. Nothing if they don't make one, or there's only one: that's
++ * taken as the file it is.
++ */
++async function filesAsArchive(
++  files: Dropped[],
++  repo: Repo
++): Promise<DocLink | undefined> {
++  if (files.length < 2 || files.some(isDirectory)) return undefined;
++  const importer = await directoryImporter();
++  const paths = files.map((file) => file.name);
++  if (!importer?.module.fitsDirectory?.(paths)) return undefined;
++  const url = await importer.module.importDirectory!(
++    repo,
++    (files as File[]).map((file) => [file.name, file])
++  );
++  log("FileDrop: Unpacked files as", importer.archive.extension, url);
 +  return docLinkFromUrl(repo, url);
 +}
 +
@@ -748,13 +800,21 @@ index c961a2d..a3d802f 100644
 +
 +/**
 + * fileDocLink for each of `files`, in order. A file that can't be read is
-+ * skipped and named in `failed`; the rest still go in.
++ * skipped and named in `failed`; the rest still go in. Files that together
++ * make an archive are unpacked as one instead (filesAsArchive).
 + */
 +export async function fileDocLinks(
 +  files: Iterable<Dropped>,
 +  repo: Repo
 +): Promise<{ links: DocLink[]; failed: string[] }> {
 +  const all = [...files];
++  try {
++    const link = await filesAsArchive(all, repo);
++    if (link) return { links: [link], failed: [] };
++  } catch (error) {
++    log("FileDrop: Failed to unpack files:", error);
++    return { links: [], failed: [`those ${all.length} files`] };
++  }
 +  const results = await Promise.allSettled(
 +    all.map((file) => fileDocLink(file, repo))
 +  );
@@ -1102,10 +1162,10 @@ index d531d50..fa35a5a 100644
          {multi() ? `Remove ${dragstack.size} items` : "Remove"}
 diff --git a/src/sideboard/knit-archives.ts b/src/sideboard/knit-archives.ts
 new file mode 100644
-index 0000000..9d95f79
+index 0000000..23cd610
 --- /dev/null
 +++ b/src/sideboard/knit-archives.ts
-@@ -0,0 +1,135 @@
+@@ -0,0 +1,141 @@
 +import {
 +  isValidAutomergeUrl,
 +  type AutomergeUrl,
@@ -1125,7 +1185,8 @@ index 0000000..9d95f79
 +// does pasting an http(s) link to one into the create-new menu's filter. A
 +// directory dropped from the computer goes to the archive that takes
 +// directories, which unpacks it if it has the archive's shape (an unzipped
-+// .patchworkfolder, say).
++// .patchworkfolder, say), and so do several files dropped or picked together
++// that have its shape.
 +export interface ArchiveDescription extends PluginDescription {
 +  /** e.g. ".patchworkfolder" */
 +  extension: string;
@@ -1156,6 +1217,11 @@ index 0000000..9d95f79
 +    repo: Repo,
 +    files: [path: string, file: Blob][]
 +  ): Promise<AutomergeUrl>;
++  /**
++   * whether files at these paths have the shape of an archive, so that
++   * several dropped together are unpacked as one
++   */
++  fitsDirectory?(paths: string[]): boolean;
 +}
 +
 +const registry = () => getRegistry<ArchiveDescription>("patchwork:archive");

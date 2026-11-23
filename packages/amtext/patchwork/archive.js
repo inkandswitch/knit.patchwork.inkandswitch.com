@@ -1,6 +1,6 @@
 import * as Automerge from "@automerge/automerge";
 import { getRegistry, isKeyhiveDoc } from "@inkandswitch/patchwork-plugins";
-import { patchworkFolder } from "../patchworkfolder.js";
+import { isFolderShaped, patchworkFolder } from "../patchworkfolder.js";
 
 // like patchwork-plugins' createDocOfDatatype2, but the new doc records only
 // its type, the way the sideboard makes docs: no suggestedImportUrl saying
@@ -36,6 +36,13 @@ export const archive = {
   async importDirectory(repo, files) {
     const { root } = await folder(repo).importDirectory(files);
     return root;
+  },
+  /**
+   * whether files at these paths make a .patchworkfolder: a directory's, or
+   * several dropped at once (all of one unzipped, say)
+   */
+  fitsDirectory(paths) {
+    return isFolderShaped(paths);
   },
 };
 
