@@ -1,16 +1,3 @@
-diff --git a/dist/repo.js b/dist/repo.js
-index 407e3bf75ca3d3e415ae0d730f39f6d011314217..f002ca6b6dd474f9285818473f9506fee30b39aa 100644
---- a/dist/repo.js
-+++ b/dist/repo.js
-@@ -92,7 +92,7 @@ export async function createRepo() {
-     });
-     const signerIdentity = {
-         peerId: signer.peerId().toString(),
--        verifyingKey: signer.verifyingKey().toHex(),
-+        verifyingKey: Array.from(signer.verifyingKey(), (b) => b.toString(16).padStart(2, "0")).join(""),
-     };
-     log("repo created, tab subduction identity:", signerIdentity);
-     return { repo, signerIdentity };
 diff --git a/dist/router.js b/dist/router.js
 index bc04f1917b3762c3870b60ecfd92ef894b5d814c..554194adc471cb1301c8e55e528110d2148d8aec 100644
 --- a/dist/router.js

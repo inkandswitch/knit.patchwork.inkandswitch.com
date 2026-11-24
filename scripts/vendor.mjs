@@ -23,16 +23,16 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "..")
 const repo = "inkandswitch/patchwork-pkg-base"
 
 const packages = {
-	// main: e4aa03b (pkg-base 0.0.165)
-	sideboard: "e4aa03babc7bf1e755bb40c9c25299b49be24966",
-	// main: e4aa03b (pkg-base 0.0.165)
-	packages: "e4aa03babc7bf1e755bb40c9c25299b49be24966",
-	// main: e4aa03b (pkg-base 0.0.165)
-	providers: "e4aa03babc7bf1e755bb40c9c25299b49be24966",
-	// main: e4aa03b (pkg-base 0.0.165), which has the call merged in (#100), and
+	// main: 3ed9292 (pkg-base 0.0.186)
+	sideboard: "3ed92920f2af0b4e08a1f903ff15dba717066f83",
+	// main: 3ed9292 (pkg-base 0.0.186)
+	packages: "3ed92920f2af0b4e08a1f903ff15dba717066f83",
+	// main: 3ed9292 (pkg-base 0.0.186)
+	providers: "3ed92920f2af0b4e08a1f903ff15dba717066f83",
+	// main: 3ed9292 (pkg-base 0.0.186), which has the call merged in (#100), and
 	// the threepane that mounts it
-	call: "e4aa03babc7bf1e755bb40c9c25299b49be24966",
-	threepane: "e4aa03babc7bf1e755bb40c9c25299b49be24966",
+	call: "3ed92920f2af0b4e08a1f903ff15dba717066f83",
+	threepane: "3ed92920f2af0b4e08a1f903ff15dba717066f83",
 }
 const pin = name => (typeof packages[name] === "string" ? {commit: packages[name]} : packages[name])
 
